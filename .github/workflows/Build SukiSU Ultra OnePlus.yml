@@ -807,6 +807,52 @@ jobs:
             echo "CONFIG_IP_SET_LIST_SET=y" >> "$CONFIG_FILE"
             echo "CONFIG_IP6_NF_NAT=y" >> "$CONFIG_FILE"
             echo "CONFIG_IP6_NF_TARGET_MASQUERADE=y" >> "$CONFIG_FILE"
+            # === BPF 和 Probes 配置 ===
+            echo "CONFIG_BPF=y" >> "$CONFIG_FILE"
+            echo "CONFIG_BPF_SYSCALL=y" >> "$CONFIG_FILE"
+            echo "CONFIG_BPF_JIT=y" >> "$CONFIG_FILE"
+            echo "CONFIG_CGROUPS=y" >> "$CONFIG_FILE"
+            echo "CONFIG_KPROBES=y" >> "$CONFIG_FILE"
+            echo "CONFIG_NET_INGRESS=y" >> "$CONFIG_FILE"
+            echo "CONFIG_NET_EGRESS=y" >> "$CONFIG_FILE"
+            echo "CONFIG_NET_SCH_INGRESS=m" >> "$CONFIG_FILE"
+            echo "CONFIG_NET_CLS_BPF=m" >> "$CONFIG_FILE"
+            echo "CONFIG_NET_CLS_ACT=y" >> "$CONFIG_FILE"
+            echo "CONFIG_BPF_STREAM_PARSER=y" >> "$CONFIG_FILE"
+            echo "CONFIG_KPROBE_EVENTS=y" >> "$CONFIG_FILE"
+            echo "CONFIG_BPF_EVENTS=y" >> "$CONFIG_FILE"
+            
+            # === 调试和 BTF 配置 ===
+            echo "CONFIG_DEBUG_INFO=y" >> "$CONFIG_FILE"
+            echo "# CONFIG_DEBUG_INFO_REDUCED is not set" >> "$CONFIG_FILE"
+            echo "CONFIG_DEBUG_INFO_BTF=y" >> "$CONFIG_FILE"
+            
+            echo "✅ Custom BPF and Debug configurations added to \$CONFIG_FILE."
+            
+            # === Docker 核心功能 ===
+            # Namespaces & Cgroups
+            echo "CONFIG_NAMESPACES=y" >> "$CONFIG_FILE"
+            echo "CONFIG_UTS_NS=y" >> "$CONFIG_FILE"
+            echo "CONFIG_IPC_NS=y" >> "$CONFIG_FILE"
+            echo "CONFIG_USER_NS=y" >> "$CONFIG_FILE"
+            echo "CONFIG_PID_NS=y" >> "$CONFIG_FILE"
+            echo "CONFIG_NET_NS=y" >> "$CONFIG_FILE"
+            echo "CONFIG_CGROUPS=y" >> "$CONFIG_FILE"
+            echo "CONFIG_CGROUP_FREEZER=y" >> "$CONFIG_FILE"
+            echo "CONFIG_CGROUP_PIDS=y" >> "$CONFIG_FILE"
+            echo "CONFIG_CGROUP_CPUACCT=y" >> "$CONFIG_FILE"
+            echo "CONFIG_CGROUP_DEVICE=y" >> "$CONFIG_FILE"
+            echo "CONFIG_MEMCG=y" >> "$CONFIG_FILE"  # 内存 cgroup
+            
+            # 文件系统支持 (OverlayFS 是 Docker 默认存储驱动)
+            echo "CONFIG_OVERLAY_FS=y" >> "$CONFIG_FILE"
+            
+            # 网络功能 (通常作为模块)
+            echo "CONFIG_VETH=m" >> "$CONFIG_FILE"
+            echo "CONFIG_BRIDGE=m" >> "$CONFIG_FILE"
+            echo "CONFIG_IP_NF_FILTER=y" >> "$CONFIG_FILE"
+            echo "CONFIG_NETFILTER_XT_MATCH_ADDRTYPE=m" >> "$CONFIG_FILE"
+
           fi
 
           # 移除构建审查
