@@ -759,7 +759,7 @@ jobs:
           
           
           # --- DOCKER Namespace 支持（容器隔离核心） ---
-          # echo "CONFIG_USER_NS=y" >> "$CONFIG_FILE"             # ❌ 非用户清单：用户命名空间隔离，注释
+          echo "CONFIG_USER_NS=y" >> "$CONFIG_FILE"             # ❌ 非用户清单：用户命名空间隔离，try add
           
           echo "CONFIG_NAMESPACES=y" >> "$CONFIG_FILE"            # ✅ 用户清单：启用命名空间支持
           echo "CONFIG_UTS_NS=y" >> "$CONFIG_FILE"                # ✅ 用户清单：主机名隔离
