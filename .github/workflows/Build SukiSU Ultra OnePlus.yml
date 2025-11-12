@@ -717,13 +717,32 @@ jobs:
           echo "CONFIG_DEBUG_INFO=y" >> "$CONFIG_FILE"
           echo "# CONFIG_DEBUG_INFO_REDUCED is not set" >> "$CONFIG_FILE"
           echo "CONFIG_DEBUG_INFO_BTF=y" >> "$CONFIG_FILE"
+
+          # === BPF 和 Probes 配置 ===
+          echo "CONFIG_BPF=y" >> "$CONFIG_FILE"
+          echo "CONFIG_BPF_SYSCALL=y" >> "$CONFIG_FILE"
+          echo "CONFIG_BPF_JIT=y" >> "$CONFIG_FILE"
+          echo "CONFIG_CGROUPS=y" >> "$CONFIG_FILE"
+          echo "CONFIG_KPROBES=y" >> "$CONFIG_FILE"
+          echo "CONFIG_NET_INGRESS=y" >> "$CONFIG_FILE"
+          echo "CONFIG_NET_EGRESS=y" >> "$CONFIG_FILE"
+          echo "CONFIG_NET_SCH_INGRESS=m" >> "$CONFIG_FILE"
+          echo "CONFIG_NET_CLS_BPF=m" >> "$CONFIG_FILE"
+          echo "CONFIG_NET_CLS_ACT=y" >> "$CONFIG_FILE"
+          echo "CONFIG_BPF_STREAM_PARSER=y" >> "$CONFIG_FILE"
+          echo "CONFIG_DEBUG_INFO=y" >> "$CONFIG_FILE"
+          echo "CONFIG_DEBUG_INFO_BTF=y" >> "$CONFIG_FILE"
+          echo "CONFIG_KPROBE_EVENTS=y" >> "$CONFIG_FILE"
+          echo "CONFIG_BPF_EVENTS=y" >> "$CONFIG_FILE"
           
           echo "✅ Custom BPF and Debug configurations added to \$CONFIG_FILE."
           
           # =====================
           # Docker 必需内核选项
           # =====================
-          
+          # Docker cpu
+          echo "CONFIG_ANDROID_CPUSET=y" >> "$CONFIG_FILE"
+
           # --- DOCKER CGroup 支持 ---
           echo "CONFIG_CGROUPS=y" >> "$CONFIG_FILE"
           echo "CONFIG_CGROUP_CPUACCT=y" >> "$CONFIG_FILE"
@@ -743,27 +762,27 @@ jobs:
           echo "CONFIG_PID_NS=y" >> "$CONFIG_FILE"
           echo "CONFIG_IPC_NS=y" >> "$CONFIG_FILE"
           echo "CONFIG_UTS_NS=y" >> "$CONFIG_FILE"
-          echo "CONFIG_USER_NS=y" >> "$CONFIG_FILE"  # 可选，但建议开启
+          # echo "CONFIG_USER_NS=y" >> "$CONFIG_FILE" 
           
           # --- DOCKER文件系统支持 ---
           echo "CONFIG_OVERLAY_FS=m" >> "$CONFIG_FILE"  # Docker 默认存储驱动
-          echo "CONFIG_EXT4_FS=y" >> "$CONFIG_FILE"
-          echo "CONFIG_EXT4_FS_POSIX_ACL=y" >> "$CONFIG_FILE"
-          echo "CONFIG_EXT4_FS_SECURITY=y" >> "$CONFIG_FILE"
+          # echo "CONFIG_EXT4_FS=y" >> "$CONFIG_FILE"
+          # echo "CONFIG_EXT4_FS_POSIX_ACL=y" >> "$CONFIG_FILE"
+          # echo "CONFIG_EXT4_FS_SECURITY=y" >> "$CONFIG_FILE"
           
           # --- DOCKER网络支持 ---
           echo "CONFIG_VETH=m" >> "$CONFIG_FILE"
-          echo "CONFIG_BRIDGE=m" >> "$CONFIG_FILE"
-          echo "CONFIG_BRIDGE_NETFILTER=m" >> "$CONFIG_FILE"
-          echo "CONFIG_IP_NF_FILTER=m" >> "$CONFIG_FILE"
-          echo "CONFIG_IP_NF_MANGLE=m" >> "$CONFIG_FILE"
-          echo "CONFIG_IP_NF_TARGET_MASQUERADE=m" >> "$CONFIG_FILE"
-          echo "CONFIG_IP6_NF_FILTER=m" >> "$CONFIG_FILE"
-          echo "CONFIG_IP6_NF_MANGLE=m" >> "$CONFIG_FILE"
-          echo "CONFIG_IP6_NF_TARGET_MASQUERADE=m" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_MATCH_ADDRTYPE=m" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_MATCH_CONNTRACK=m" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_MARK=m" >> "$CONFIG_FILE"
+          # echo "CONFIG_BRIDGE=m" >> "$CONFIG_FILE"
+          # echo "CONFIG_BRIDGE_NETFILTER=m" >> "$CONFIG_FILE"
+          # echo "CONFIG_IP_NF_FILTER=m" >> "$CONFIG_FILE"
+          # echo "CONFIG_IP_NF_MANGLE=m" >> "$CONFIG_FILE"
+          # echo "CONFIG_IP_NF_TARGET_MASQUERADE=m" >> "$CONFIG_FILE"
+          # echo "CONFIG_IP6_NF_FILTER=m" >> "$CONFIG_FILE"
+          # echo "CONFIG_IP6_NF_MANGLE=m" >> "$CONFIG_FILE"
+          # echo "CONFIG_IP6_NF_TARGET_MASQUERADE=m" >> "$CONFIG_FILE"
+          # echo "CONFIG_NETFILTER_XT_MATCH_ADDRTYPE=m" >> "$CONFIG_FILE"
+          # echo "CONFIG_NETFILTER_XT_MATCH_CONNTRACK=m" >> "$CONFIG_FILE"
+          # echo "CONFIG_NETFILTER_XT_MARK=m" >> "$CONFIG_FILE"
           echo "CONFIG_IP_NF_RAW=m" >> "$CONFIG_FILE"
           echo "CONFIG_IP_NF_NAT=m" >> "$CONFIG_FILE"
           echo "CONFIG_NF_NAT=m" >> "$CONFIG_FILE"
@@ -771,18 +790,18 @@ jobs:
           echo "CONFIG_IP6_NF_NAT=m" >> "$CONFIG_FILE"
           
           # --- DOCKER安全 / 其他 ---
-          echo "CONFIG_POSIX_MQUEUE=y" >> "$CONFIG_FILE"
-          echo "CONFIG_KEYS=y" >> "$CONFIG_FILE"
-          echo "CONFIG_SECCOMP=y" >> "$CONFIG_FILE"
-          echo "CONFIG_SECCOMP_FILTER=y" >> "$CONFIG_FILE"
-          echo "CONFIG_SECURITY_APPARMOR=y" >> "$CONFIG_FILE"
+          # echo "CONFIG_POSIX_MQUEUE=y" >> "$CONFIG_FILE"
+          # echo "CONFIG_KEYS=y" >> "$CONFIG_FILE"
+          # echo "CONFIG_SECCOMP=y" >> "$CONFIG_FILE"
+          # echo "CONFIG_SECCOMP_FILTER=y" >> "$CONFIG_FILE"
+          # echo "CONFIG_SECURITY_APPARMOR=y" >> "$CONFIG_FILE"
           
           # --- DOCKER网络额外可选模块 ---
           echo "CONFIG_NET_CLS_CGROUP=m" >> "$CONFIG_FILE"
-          echo "CONFIG_VXLAN=m" >> "$CONFIG_FILE"
-          echo "CONFIG_IPVLAN=m" >> "$CONFIG_FILE"
-          echo "CONFIG_MACVLAN=m" >> "$CONFIG_FILE"
-          echo "CONFIG_DUMMY=m" >> "$CONFIG_FILE"
+          # echo "CONFIG_VXLAN=m" >> "$CONFIG_FILE"
+          # echo "CONFIG_IPVLAN=m" >> "$CONFIG_FILE"
+          # echo "CONFIG_MACVLAN=m" >> "$CONFIG_FILE"
+          # echo "CONFIG_DUMMY=m" >> "$CONFIG_FILE"
           
           # SukiSU Ultra配置
           echo "CONFIG_KSU=y" >> "$CONFIG_FILE"
@@ -878,20 +897,6 @@ jobs:
             echo "CONFIG_IP_SET_LIST_SET=y" >> "$CONFIG_FILE"
             echo "CONFIG_IP6_NF_NAT=y" >> "$CONFIG_FILE"
             echo "CONFIG_IP6_NF_TARGET_MASQUERADE=y" >> "$CONFIG_FILE"
-            # === BPF 和 Probes 配置 ===
-            echo "CONFIG_BPF=y" >> "$CONFIG_FILE"
-            echo "CONFIG_BPF_SYSCALL=y" >> "$CONFIG_FILE"
-            echo "CONFIG_BPF_JIT=y" >> "$CONFIG_FILE"
-            echo "CONFIG_CGROUPS=y" >> "$CONFIG_FILE"
-            echo "CONFIG_KPROBES=y" >> "$CONFIG_FILE"
-            echo "CONFIG_NET_INGRESS=y" >> "$CONFIG_FILE"
-            echo "CONFIG_NET_EGRESS=y" >> "$CONFIG_FILE"
-            echo "CONFIG_NET_SCH_INGRESS=m" >> "$CONFIG_FILE"
-            echo "CONFIG_NET_CLS_BPF=m" >> "$CONFIG_FILE"
-            echo "CONFIG_NET_CLS_ACT=y" >> "$CONFIG_FILE"
-            echo "CONFIG_BPF_STREAM_PARSER=y" >> "$CONFIG_FILE"
-            echo "CONFIG_KPROBE_EVENTS=y" >> "$CONFIG_FILE"
-            echo "CONFIG_BPF_EVENTS=y" >> "$CONFIG_FILE"
             
           fi
 
