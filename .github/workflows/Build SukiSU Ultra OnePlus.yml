@@ -740,71 +740,86 @@ jobs:
           # =====================
           # Docker 必需内核选项
           # =====================
-          # Docker cpu
-
-          # echo "CONFIG_ANDROID_CPUSET=y" >> "$CONFIG_FILE"      # ⚙️ Android 特有，非 Docker 相关，暂时注释
-
-          # --- DOCKER CGroup 支持（容器资源隔离） ---
-          echo "CONFIG_CGROUPS=y" >> "$CONFIG_FILE"               # ✅ Docker 必要功能：启用 cgroup 框架
-          echo "CONFIG_CGROUP_SCHED=y" >> "$CONFIG_FILE"          # ✅ Docker 必要功能：启用 cgroup 调度器
-          echo "CONFIG_CGROUP_PIDS=y" >> "$CONFIG_FILE"           # ✅ Docker 必要功能：限制容器进程数
-          echo "CONFIG_CGROUP_FREEZER=y" >> "$CONFIG_FILE"        # ✅ Docker 必要功能：容器冻结/恢复
-          echo "CONFIG_CGROUP_CPUACCT=y" >> "$CONFIG_FILE"        # ✅ Docker 必要功能：CPU 统计与配额
-          echo "CONFIG_MEMCG=y" >> "$CONFIG_FILE"                 # ✅ Docker 必要功能：内存控制
-          # echo "CONFIG_CGROUP_DEVICE=y" >> "$CONFIG_FILE"       # ⚙️ 非必要：设备访问控制，暂时注释
-          # echo "CONFIG_CGROUP_NET_PRIO=y" >> "$CONFIG_FILE"     # ⚙️ 非必要：网络优先级控制，暂时注释
-          echo "CONFIG_FAIR_GROUP_SCHED=y" >> "$CONFIG_FILE"      # ✅ Docker 必要功能：公平调度组支持
-          echo "CONFIG_CFS_BANDWIDTH=y" >> "$CONFIG_FILE"         # ✅ Docker 必要功能：CPU 时间片限制
-
-          # --- DOCKER Namespace 支持（容器隔离核心） ---
-          echo "CONFIG_NAMESPACES=y" >> "$CONFIG_FILE"            # ✅ Docker 必要功能：启用命名空间支持
-          echo "CONFIG_UTS_NS=y" >> "$CONFIG_FILE"                # ✅ Docker 必要功能：主机名隔离
-          echo "CONFIG_IPC_NS=y" >> "$CONFIG_FILE"                # ✅ Docker 必要功能：进程通信隔离
-          echo "CONFIG_PID_NS=y" >> "$CONFIG_FILE"                # ✅ Docker 必要功能：进程号隔离
-          echo "CONFIG_NET_NS=y" >> "$CONFIG_FILE"                # ✅ Docker 必要功能：网络命名空间
-          # echo "CONFIG_USER_NS=y" >> "$CONFIG_FILE"             # ⚙️ 非必要：User Namespace，部分容器运行时才需
-
-          # --- DOCKER 文件系统支持 ---
-          echo "CONFIG_OVERLAY_FS=y" >> "$CONFIG_FILE"            # ✅ Docker 必要功能：OverlayFS 存储层
-          # echo "CONFIG_EXT4_FS=y" >> "$CONFIG_FILE"             # ⚙️ 非必要：宿主文件系统支持，暂时注释
-          # echo "CONFIG_EXT4_FS_POSIX_ACL=y" >> "$CONFIG_FILE"   # ⚙️ 非必要：ACL 权限支持，暂时注释
-          # echo "CONFIG_EXT4_FS_SECURITY=y" >> "$CONFIG_FILE"    # ⚙️ 非必要：SELinux 标签支持，暂时注释
-
-          # --- DOCKER 网络支持 ---
-          echo "CONFIG_VETH=y" >> "$CONFIG_FILE"                  # ✅ Docker 必要功能：虚拟网卡对 veth
-          echo "CONFIG_BRIDGE=y" >> "$CONFIG_FILE"                # ✅ Docker 必要功能：Linux Bridge 桥接
-          echo "CONFIG_BRIDGE_NETFILTER=y" >> "$CONFIG_FILE"      # ✅ Docker 必要功能：桥接上启用 iptables
-          echo "CONFIG_NF_NAT=y" >> "$CONFIG_FILE"                # ✅ Docker 必要功能：NAT 核心
-          echo "CONFIG_IP_NF_FILTER=y" >> "$CONFIG_FILE"          # ✅ Docker 必要功能：iptables filter 表
-          echo "CONFIG_IP_NF_MANGLE=y" >> "$CONFIG_FILE"          # ✅ Docker 必要功能：iptables mangle 表
-          echo "CONFIG_IP_NF_RAW=y" >> "$CONFIG_FILE"             # 🧩 missing：raw 表支持，部分源码缺失但 Docker 依赖
-          echo "CONFIG_IP_NF_NAT=y" >> "$CONFIG_FILE"             # ✅ Docker 必要功能：IPv4 NAT 支持
-          echo "CONFIG_IP_NF_TARGET_MASQUERADE=y" >> "$CONFIG_FILE"  # ✅ Docker 必要功能：SNAT 出口伪装
-          echo "CONFIG_NETFILTER_XT_MATCH_CONNTRACK=y" >> "$CONFIG_FILE"  # ✅ Docker 必要功能：连接跟踪匹配
-          echo "CONFIG_NETFILTER_XT_MATCH_ADDRTYPE=y" >> "$CONFIG_FILE"   # ✅ Docker 必要功能：地址类型匹配
-          echo "CONFIG_NETFILTER_XT_MARK=y" >> "$CONFIG_FILE"             # ✅ Docker 必要功能：流量标记匹配
-          echo "CONFIG_NF_CONNTRACK=y" >> "$CONFIG_FILE"                  # ✅ Docker 必要功能：连接跟踪核心模块
-          echo "CONFIG_NF_DEFRAG_IPV4=y" >> "$CONFIG_FILE"                # ✅ Docker 必要功能：IPv4 分片重组
-          # echo "CONFIG_IP6_NF_FILTER=y" >> "$CONFIG_FILE"               # ⚙️ 非必要：IPv6 支持暂时注释
-          # echo "CONFIG_IP6_NF_NAT=y" >> "$CONFIG_FILE"                  # ⚙️ 非必要：IPv6 NAT 暂时注释
-
-          # --- 可选但推荐 ---
-          echo "CONFIG_KEYS=y" >> "$CONFIG_FILE"                # ⚙️ 推荐：Swarm / Secret 依赖
-          echo "CONFIG_POSIX_MQUEUE=y" >> "$CONFIG_FILE"        # ⚙️ 推荐：消息队列支持
-
-          # --- DOCKER安全 / 其他 ---
-          # echo "CONFIG_SECCOMP=y" >> "$CONFIG_FILE"            # ⚙️ 非必要：系统调用过滤，暂时注释
-          # echo "CONFIG_SECCOMP_FILTER=y" >> "$CONFIG_FILE"     # ⚙️ 非必要：Seccomp 扩展过滤器
-          # echo "CONFIG_SECURITY_APPARMOR=y" >> "$CONFIG_FILE"  # ⚙️ 非必要：AppArmor 安全模块
-
-          # --- DOCKER 网络额外可选模块 ---
-          echo "CONFIG_NET_CLS_CGROUP=m" >> "$CONFIG_FILE"       # ⚙️ 推荐：按 cgroup 分类流量控制
-          # echo "CONFIG_VXLAN=m" >> "$CONFIG_FILE"              # ⚙️ 非必要：VXLAN 虚拟网络，暂时注释
-          # echo "CONFIG_IPVLAN=m" >> "$CONFIG_FILE"             # ⚙️ 非必要：IPvlan 网络模式
-          # echo "CONFIG_MACVLAN=m" >> "$CONFIG_FILE"            # ⚙️ 非必要：Macvlan 网络模式
-          # echo "CONFIG_DUMMY=m" >> "$CONFIG_FILE"              # ⚙️ 非必要：虚拟 dummy 接口，暂时注释
-
           
+          # --- DOCKER CGroup 支持（容器资源隔离） ---
+          # echo "CONFIG_ANDROID_CPUSET=y" >> "$CONFIG_FILE"      # ⚙️ Android 特有配置，非 Docker 核心，注释
+          # echo "CONFIG_FAIR_GROUP_SCHED=y" >> "$CONFIG_FILE"    # ❌ 非用户清单：CFS 公平调度器组支持，注释
+          # echo "CONFIG_CFS_BANDWIDTH=y" >> "$CONFIG_FILE"       # ❌ 非用户清单：CPU 时间片限制，注释
+          # echo "CONFIG_CGROUP_PIDS=y" >> "$CONFIG_FILE"         # ❌ 非用户清单：限制容器进程数，注释
+          # echo "CONFIG_CGROUP_NET_PRIO=y" >> "$CONFIG_FILE"     # ❌ 非用户清单：网络优先级控制，注释
+          
+          echo "CONFIG_CGROUPS=y" >> "$CONFIG_FILE"              # ✅ 用户清单：启用 cgroup 框架
+          echo "CONFIG_CGROUP_SCHED=y" >> "$CONFIG_FILE"          # ✅ 用户清单：启用 cgroup 调度器
+          echo "CONFIG_CGROUP_FREEZER=y" >> "$CONFIG_FILE"        # ✅ 用户清单：容器冻结/恢复
+          echo "CONFIG_CGROUP_CPUACCT=y" >> "$CONFIG_FILE"        # ✅ 用户清单：CPU 统计与配额
+          echo "CONFIG_MEMCG=y" >> "$CONFIG_FILE"                 # ✅ 用户清单：内存控制
+          echo "CONFIG_CGROUP_DEVICE=y" >> "$CONFIG_FILE"         # ✅ 用户清单：设备访问控制
+          echo "CONFIG_CPUSETS=y" >> "$CONFIG_FILE"               # ✅ 用户清单：CPU/内存节点绑定控制
+          echo "CONFIG_CGROUP_BPF=y" >> "$CONFIG_FILE"            # ✅ 用户清单：CGroup eBPF 扩展支持
+          
+          
+          # --- DOCKER Namespace 支持（容器隔离核心） ---
+          # echo "CONFIG_USER_NS=y" >> "$CONFIG_FILE"             # ❌ 非用户清单：用户命名空间隔离，注释
+          
+          echo "CONFIG_NAMESPACES=y" >> "$CONFIG_FILE"            # ✅ 用户清单：启用命名空间支持
+          echo "CONFIG_UTS_NS=y" >> "$CONFIG_FILE"                # ✅ 用户清单：主机名隔离
+          echo "CONFIG_IPC_NS=y" >> "$CONFIG_FILE"                # ✅ 用户清单：进程通信隔离
+          echo "CONFIG_PID_NS=y" >> "$CONFIG_FILE"                # ✅ 用户清单：进程号隔离
+          echo "CONFIG_NET_NS=y" >> "$CONFIG_FILE"                # ✅ 用户清单：网络命名空间
+          
+          
+          # --- DOCKER 文件系统支持 ---
+          echo "CONFIG_OVERLAY_FS=y" >> "$CONFIG_FILE"          # ❌ 非用户清单：OverlayFS 存储层支持，注释
+          # echo "CONFIG_EXT4_FS=y" >> "$CONFIG_FILE"             # ❌ 非用户清单：EXT4 文件系统支持，注释
+          # echo "CONFIG_EXT4_FS_POSIX_ACL=y" >> "$CONFIG_FILE"   # ❌ 非用户清单：EXT4 ACL 权限支持，注释
+          # echo "CONFIG_EXT4_FS_SECURITY=y" >> "$CONFIG_FILE"    # ❌ 非用户清单：EXT4 SELinux 标签支持，注释
+          
+          
+          # --- DOCKER 网络支持 (iptables / Netfilter) ---
+          # echo "CONFIG_NF_CONNTRACK=y" >> "$CONFIG_FILE"        # ❌ 非用户清单：连接跟踪核心模块，注释
+          # echo "CONFIG_NF_DEFRAG_IPV4=y" >> "$CONFIG_FILE"      # ❌ 非用户清单：IPv4 分片重组，注释
+          # echo "CONFIG_NET_CLS_CGROUP=m" >> "$CONFIG_FILE"      # ❌ 非用户清单：按 cgroup 分类流量控制，注释
+          
+          echo "CONFIG_VETH=m" >> "$CONFIG_FILE"                  # ✅ 用户清单：虚拟网卡对 veth (模块)
+          echo "CONFIG_BRIDGE=m" >> "$CONFIG_FILE"                # ✅ 用户清单：Linux Bridge 桥接 (模块)
+          echo "CONFIG_BRIDGE_NETFILTER=m" >> "$CONFIG_FILE"      # ✅ 用户清单：桥接上启用 iptables (模块)
+          echo "CONFIG_NF_NAT=y" >> "$CONFIG_FILE"                # ✅ 用户清单：NAT 核心
+          
+          # IPv4 规则
+          echo "CONFIG_IP_NF_FILTER=m" >> "$CONFIG_FILE"          # ✅ 用户清单：iptables filter 表 (模块)
+          echo "CONFIG_IP_NF_MANGLE=m" >> "$CONFIG_FILE"          # ✅ 用户清单：iptables mangle 表 (模块)
+          echo "CONFIG_IP_NF_RAW=m" >> "$CONFIG_FILE"             # ✅ 用户清单：iptables raw 表 (模块)
+          echo "CONFIG_IP_NF_NAT=m" >> "$CONFIG_FILE"             # ✅ 用户清单：IPv4 NAT 支持 (模块)
+          echo "CONFIG_IP_NF_TARGET_MASQUERADE=m" >> "$CONFIG_FILE" # ✅ 用户清单：SNAT 出口伪装 (模块)
+          
+          # IPv6 规则
+          echo "CONFIG_IP6_NF_FILTER=m" >> "$CONFIG_FILE"         # ✅ 用户清单：IPv6 filter 表 (模块)
+          echo "CONFIG_IP6_NF_MANGLE=m" >> "$CONFIG_FILE"         # ✅ 用户清单：IPv6 mangle 表 (模块)
+          echo "CONFIG_IP6_NF_RAW=m" >> "$CONFIG_FILE"            # ✅ 用户清单：IPv6 raw 表 (模块)
+          echo "CONFIG_IP6_NF_NAT=m" >> "$CONFIG_FILE"            # ✅ 用户清单：IPv6 NAT 支持 (模块)
+          echo "CONFIG_IP6_NF_TARGET_MASQUERADE=m" >> "$CONFIG_FILE" # ✅ 用户清单：IPv6 SNAT 出口伪装 (模块)
+          
+          # Netfilter 匹配扩展
+          echo "CONFIG_NETFILTER_XT_MATCH_ADDRTYPE=m" >> "$CONFIG_FILE"  # ✅ 用户清单：地址类型匹配 (模块)
+          echo "CONFIG_NETFILTER_XT_MATCH_CONNTRACK=m" >> "$CONFIG_FILE" # ✅ 用户清单：连接跟踪匹配 (模块)
+          echo "CONFIG_NETFILTER_XT_MATCH_IPVS=m" >> "$CONFIG_FILE"      # ✅ 用户清单：IPVS 匹配 (模块)
+          echo "CONFIG_NETFILTER_XT_MARK=m" >> "$CONFIG_FILE"            # ✅ 用户清单：流量标记匹配 (模块)
+          
+          # --- DOCKER 网络额外可选模块 ---
+          # echo "CONFIG_VXLAN=m" >> "$CONFIG_FILE"               # ❌ 非用户清单：VXLAN 虚拟网络支持，注释
+          # echo "CONFIG_IPVLAN=m" >> "$CONFIG_FILE"              # ❌ 非用户清单：IPvlan 网络模式支持，注释
+          # echo "CONFIG_MACVLAN=m" >> "$CONFIG_FILE"             # ❌ 非用户清单：Macvlan 网络模式支持，注释
+          # echo "CONFIG_DUMMY=m" >> "$CONFIG_FILE"               # ❌ 非用户清单：虚拟 dummy 接口支持，注释
+          
+          
+          # --- 可选但推荐/其他 ---
+          # echo "CONFIG_SECCOMP=y" >> "$CONFIG_FILE"             # ❌ 非用户清单：系统调用过滤（Seccomp），注释
+          # echo "CONFIG_SECCOMP_FILTER=y" >> "$CONFIG_FILE"      # ❌ 非用户清单：Seccomp 扩展过滤器，注释
+          # echo "CONFIG_SECURITY_APPARMOR=y" >> "$CONFIG_FILE"   # ❌ 非用户清单：AppArmor 安全模块，注释
+          
+          echo "CONFIG_KEYS=y" >> "$CONFIG_FILE"                  # ✅ 用户清单：密钥环支持 (Swarm/Secret 依赖)
+          echo "CONFIG_POSIX_MQUEUE=y" >> "$CONFIG_FILE"          # ✅ 用户清单：消息队列支持
+
           # SukiSU Ultra配置
           echo "CONFIG_KSU=y" >> "$CONFIG_FILE"
 
