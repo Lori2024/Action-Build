@@ -759,7 +759,7 @@ jobs:
           
           
           # --- DOCKER Namespace 支持（容器隔离核心） ---
-          echo "CONFIG_USER_NS=y" >> "$CONFIG_FILE"             # ❌ 非用户清单：用户命名空间隔离，try add
+          echo "CONFIG_USER_NS=y" >> "$CONFIG_FILE"             # ❌ 非用户清单：用户命名空间隔离，try add1
           
           echo "CONFIG_NAMESPACES=y" >> "$CONFIG_FILE"            # ✅ 用户清单：启用命名空间支持
           echo "CONFIG_UTS_NS=y" >> "$CONFIG_FILE"                # ✅ 用户清单：主机名隔离
@@ -783,6 +783,7 @@ jobs:
           echo "CONFIG_VETH=m" >> "$CONFIG_FILE"                  # ✅ 用户清单：虚拟网卡对 veth (模块)
           echo "CONFIG_BRIDGE=m" >> "$CONFIG_FILE"                # ✅ 用户清单：Linux Bridge 桥接 (模块)
           echo "CONFIG_BRIDGE_NETFILTER=m" >> "$CONFIG_FILE"      # ✅ 用户清单：桥接上启用 iptables (模块)
+          # echo "CONFIG_BRIDGE_IGMP_SNOOPING=m" >> "$CONFIG_FILE"      #  ❌ 非用户清单：桥接IGMP
           echo "CONFIG_NF_NAT=y" >> "$CONFIG_FILE"                # ✅ 用户清单：NAT 核心
           
           # IPv4 规则
@@ -812,13 +813,16 @@ jobs:
           # echo "CONFIG_DUMMY=m" >> "$CONFIG_FILE"               # ❌ 非用户清单：虚拟 dummy 接口支持，注释
           
           
-          # --- 可选但推荐/其他 ---
+          # --- DOCKER 可选但推荐/其他 ---
           # echo "CONFIG_SECCOMP=y" >> "$CONFIG_FILE"             # ❌ 非用户清单：系统调用过滤（Seccomp），注释
           # echo "CONFIG_SECCOMP_FILTER=y" >> "$CONFIG_FILE"      # ❌ 非用户清单：Seccomp 扩展过滤器，注释
           # echo "CONFIG_SECURITY_APPARMOR=y" >> "$CONFIG_FILE"   # ❌ 非用户清单：AppArmor 安全模块，注释
           
           echo "CONFIG_KEYS=y" >> "$CONFIG_FILE"                  # ✅ 用户清单：密钥环支持 (Swarm/Secret 依赖)
           echo "CONFIG_POSIX_MQUEUE=y" >> "$CONFIG_FILE"          # ✅ 用户清单：消息队列支持
+
+          # --- Reclone rclone mount） ---
+          echo "CONFIG_FUSE_FS=y" >> "$CONFIG_FILE"                  # ✅ rclone mount ，try add2
 
           # SukiSU Ultra配置
           echo "CONFIG_KSU=y" >> "$CONFIG_FILE"
