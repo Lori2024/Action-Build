@@ -40,6 +40,7 @@ jobs:
             "drivers/video/fbdev/msm/oplus_display/Kconfig"
             "drivers/soc/oplus/performance/Kconfig"
             "fs/proc/healthinfo/Kconfig"
+            "kernel/tuning/Kconfig"
           )
       
           for k in "${REMOVE_KCONFIG_PATHS[@]}"; do
