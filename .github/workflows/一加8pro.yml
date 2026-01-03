@@ -22,55 +22,66 @@ jobs:
           git clone --depth=1 https://github.com/kdrag0n/proton-clang.git clang
           echo "$(pwd)/clang/bin" >> $GITHUB_PATH
 
-      - name: Hard-Fix Oplus Kernel Gaps (Safe)
+      - name: Hard-Fix Oplus Kernel Gaps (ALL PLACEHOLDER MODE)
         run: |
           set -e
           cd kernel
       
-          echo "🧹 Step 1: Remove Oplus-only Kconfig references (explicit list)..."
+          echo "🛡️ Oplus Kernel placeholder fix — NEVER delete source"
+          echo "==================================================="
       
-          REMOVE_KCONFIG_PATHS=(
-            "kernel/sched_assist/Kconfig"
-            "kernel/tuning/Kconfig"
-            "block/uxio_first/Kconfig"
-            "mm/healthinfo/Kconfig"
-            "mm/memory_isolate/Kconfig"
-            "mm/multi_kswapd/Kconfig"
-            "mm/pms/Kconfig"
-            "mm/task_mem/Kconfig"
-            "mm/malloc_track/Kconfig"
-            "mm/cpu_report/Kconfig"
-            "drivers/video/fbdev/msm/oplus_display/Kconfig"
-            "drivers/soc/oplus/performance/Kconfig"
-            "fs/proc/healthinfo/Kconfig"
-          )
-      
-          for k in "${REMOVE_KCONFIG_PATHS[@]}"; do
-            echo "  🔥 Removing source \"$k\""
-            grep -rl "source \"$k\"" . | xargs -r sed -i "\|source \"$k\"|d"
-          done
+          ROOT_DIR="$(pwd)"
       
           echo
-          echo "🧹 Step 2: Remove Oplus-only Makefile obj-* references..."
+          echo "🔍 Step 1: Scan all Kconfig source statements..."
       
-          REMOVE_OBJ_DIRS=(
-            "sched_assist"
-            "tuning"
-            "uxio_first"
-            "healthinfo"
-            "memory_isolate"
-            "multi_kswapd"
-            "pms"
-            "task_mem"
-            "malloc_track"
-            "cpu_report"
-            "oplus_display"
-            "performance"
+          mapfile -t SOURCES < <(
+            grep -RhoE '^[[:space:]]*source[[:space:]]+"[^"]+"' \
+              --include='Kconfig*' . \
+            | sed -E 's/.*"([^"]+)".*/\1/' \
+            | sort -u
           )
       
-          for d in "${REMOVE_OBJ_DIRS[@]}"; do
-            echo "  🔥 Removing obj references for $d"
-            grep -rlE "obj-.*\+=.*$d(/|$)" . | xargs -r sed -i "/$d/d"
+          echo "📦 Found ${#SOURCES[@]} sourced Kconfig paths"
+      
+          echo
+          echo "🧩 Step 2: Create placeholders for missing Kconfig / dirs..."
+      
+          for SRC in "${SOURCES[@]}"; do
+            # 跳过变量路径（如 arch/$(SRCARCH)/Kconfig）
+            if [[ "$SRC" == *'$('*')'* ]]; then
+              echo "  ⚠️ Skip variable path: $SRC"
+              continue
+            fi
+      
+            TARGET="$ROOT_DIR/$SRC"
+            DIR="$(dirname "$TARGET")"
+      
+            if [ ! -f "$TARGET" ]; then
+              echo "  ➕ Placeholder for missing: $SRC"
+      
+              mkdir -p "$DIR"
+      
+              # 创建 dummy Kconfig
+              cat > "$TARGET" <<EOF
+      # AUTO-GENERATED PLACEHOLDER
+      # Missing in open-source release (Oplus vendor module)
+      menu "Dummy placeholder: $SRC"
+      config OPLUS_DUMMY_$(echo "$SRC" | tr '/.' '__' | tr 'a-z' 'A-Z')
+          bool "Placeholder for $SRC"
+          default n
+      endmenu
+      EOF
+            fi
+      
+            # 确保同级 Makefile 存在
+            if [ ! -f "$DIR/Makefile" ]; then
+              echo "    ➕ Create dummy Makefile in $DIR"
+              cat > "$DIR/Makefile" <<'EOF'
+      # AUTO-GENERATED PLACEHOLDER
+      obj- :=
+      EOF
+            fi
           done
       
           echo
@@ -79,46 +90,20 @@ jobs:
           if [ -f OplusKernelEnvConfig.mk ]; then
             if grep -q "FILENAME=- FNR=1" OplusKernelEnvConfig.mk; then
               sed -i 's/FILENAME=- FNR=1/FNR==1/' OplusKernelEnvConfig.mk
-              echo "  ✔ Fixed awk condition in OplusKernelEnvConfig.mk"
+              echo "  ✔ Fixed awk condition"
             else
-              echo "  ✔ No known awk issue detected"
+              echo "  ✔ No awk issue detected"
             fi
           fi
       
           echo
-          echo "🐍 Step 4: Ensure python3 (do NOT force python2)..."
+          echo "🐍 Step 4: Normalize python shebang → python3"
       
           grep -rl "^#!.*python$" scripts/ | xargs -r sed -i 's|python$|python3|'
       
           echo
-          echo "🛡️ Step 5: Defensive cleanup — SAFE Kconfig source fix..."
+          echo "✅ Placeholder fix complete — Kconfig will NEVER break again."
       
-          ROOT_DIR=$(pwd)
-      
-          find . -name 'Kconfig*' \
-            ! -path './scripts/kconfig/tests/*' \
-            ! -path './tools/*' \
-            -type f | while read -r kfile; do
-      
-              grep '^[[:space:]]*source "' "$kfile" | while read -r line; do
-                kpath=$(echo "$line" | sed -n 's/.*source "\(.*\)".*/\1/p')
-      
-                # 跳过带变量的合法写法
-                if echo "$kpath" | grep -q '\$('; then
-                  continue
-                fi
-      
-                real="$ROOT_DIR/$kpath"
-      
-                if [ ! -f "$real" ]; then
-                  echo "  ❌ Missing Kconfig: $kpath → removed from $kfile"
-                  sed -i "\|source \"$kpath\"|d" "$kfile"
-                fi
-              done
-            done
-      
-          echo
-          echo "✅ Oplus kernel hard-fix completed safely."
 
 
       - name: Compile Kernel
