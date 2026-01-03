@@ -22,12 +22,12 @@ jobs:
           git clone --depth=1 https://github.com/kdrag0n/proton-clang.git clang
           echo "$(pwd)/clang/bin" >> $GITHUB_PATH
 
-      - name: Hard-Fix Source Gaps & Cleanup (Double Insurance)
+      - name: Hard-Fix Specified Gaps
         run: |
           cd kernel
           
-          # 【1】手动定义的必须删除目录清单
-          # 哪怕文件夹存在，也要强制从 Kconfig/Makefile 中剥离
+          # 【1】定义你确认要剔除的目录或文件
+          # 脚本会自动在父级 Kconfig/Makefile 中删除对这些名字的引用
           MUST_REMOVE=(
             "block/uxio_first"
             "mm/healthinfo"
@@ -40,48 +40,40 @@ jobs:
             "kernel/sched_assist"
             "drivers/video/fbdev/msm/oplus_display"
             "drivers/soc/oplus/performance"
-            "fs/proc/healthinfo/Kconfig"
+            "fs/proc/healthinfo"
           )
 
-          echo "🗑️ Step 1: Force removing manually defined modules..."
+          echo "🗑️ Step 1: Removing specified modules from build tree..."
           for item in "${MUST_REMOVE[@]}"; do
             DIR_NAME=$(basename $item)
             PARENT_DIR=$(dirname $item)
-            # 从父级 Kconfig 删除引用
+            
+            # 从父级 Kconfig 删除引用行 (例如 source "xxx/Kconfig")
             if [ -f "$PARENT_DIR/Kconfig" ]; then
+              echo "✔️ Cleaning $PARENT_DIR/Kconfig"
               sed -i "/$DIR_NAME/d" "$PARENT_DIR/Kconfig" || true
             fi
-            # 从父级 Makefile 删除引用
+            
+            # 从父级 Makefile 删除编译行 (例如 obj-y += xxx/)
             if [ -f "$PARENT_DIR/Makefile" ]; then
+              echo "✔️ Cleaning $PARENT_DIR/Makefile"
               sed -i "/$DIR_NAME/d" "$PARENT_DIR/Makefile" || true
             fi
-            echo "✔️ Forced removal of $item"
           done
 
-          echo "🔍 Step 2: Deep scanning for other missing Kconfig files..."
-          # 自动扫描：如果 Kconfig 引用了物理上不存在的文件，直接删除该行
-          find . -name "Kconfig" -type f -print0 | xargs -0 grep -l "source " | while read -r kfile; do
-            grep "source " "$kfile" | sed -E 's/.*source "([^"]+)".*/\1/' | while read -r target; do
-              # 检查物理文件是否存在
-              if [ ! -f "$target" ] && [ ! -f "$(dirname $kfile)/$target" ]; then
-                echo "🚫 Auto-fixed ghost reference: $target in $kfile"
-                escaped_target=$(echo "$target" | sed 's/\//\\\//g')
-                sed -i "/source \"$escaped_target\"/d" "$kfile"
-              fi
-            done
-          done
-
-          echo "🛠️ Step 3: Environment & Encoding Fixes..."
-          # 修复 Oplus 环境脚本 awk 错误
+          echo "🛠️ Step 2: Critical Environment Fixes..."
+          # 必须修复：否则 Oplus 的编译环境配置脚本会报错停止
           sed -i 's/FILENAME=- FNR=1/ /g' OplusKernelEnvConfig.mk || true
-          # 修复非法字符警告
+          
+          # 必须修复：将内核脚本内部引用的 python 强制指向 python2 (GitHub 默认是 python3)
+          grep -rl "#!.*python" scripts/ | xargs sed -i 's/python$/python2/g' || true
+          
+          # 修复 damon 警告 (可选，但建议保留以保持日志清洁)
           if [ -f "mm/damon/Kconfig" ]; then
             tr -cd '\11\12\15\40-\176' < mm/damon/Kconfig > mm/damon/Kconfig.tmp && mv mm/damon/Kconfig.tmp mm/damon/Kconfig
           fi
-          # 强制 Python 2
-          grep -rl "#!.*python" scripts/ | xargs sed -i 's/python$/python2/g' || true
           
-          echo "✅ Cleanup complete. Ready to build."
+          echo "✅ Cleanup of specified modules complete."
 
       - name: Compile Kernel
         run: |
