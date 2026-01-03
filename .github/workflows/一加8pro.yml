@@ -22,49 +22,13 @@ jobs:
           git clone --depth=1 https://github.com/kdrag0n/proton-clang.git clang
           echo "$(pwd)/clang/bin" >> $GITHUB_PATH
 
-      - name: Hard-Fix Source Gaps
+      - name: Hard-Fix Source Gaps & Cleanup (Double Insurance)
         run: |
           cd kernel
           
-          # 1. 自动删除所有 Kconfig 中引用的但物理上不存在的路径
-          # 我们扫描所有 Kconfig，查找 source 语句，如果目标文件不存在，直接删除该行
-          echo "🔍 Start deep scanning for missing Kconfig files..."
-          find . -name "Kconfig" -type f -print0 | xargs -0 grep -l "source " | while read -r kfile; do
-            # 提取所有 source 引用的路径
-            grep "source " "$kfile" | sed -E 's/.*source "([^"]+)".*/\1/' | while read -r target; do
-              # 处理相对路径：有些是相对于内核根目录，有些是相对于当前目录
-              if [ ! -f "$target" ] && [ ! -f "$(dirname $kfile)/$target" ]; then
-                echo "🚫 Fixed: Removing missing $target from $kfile"
-                # 转义特殊字符并删除匹配行
-                escaped_target=$(echo "$target" | sed 's/\//\\\//g')
-                sed -i "/source \"$escaped_target\"/d" "$kfile"
-              fi
-            done
-          done
-
-          # 2. 预防性清理：有些模块不仅在 Kconfig，还在 Makefile 中通过 obj-y 引用
-          echo "🧹 Cleaning up Makefile ghost references..."
-          # 定义常见的缺失目录名
-          GHOST_MODS=("uxio_first" "sched_assist" "healthinfo" "memory_isolate" "malloc_track" "task_mem" "cpu_report" "oplus_display")
-          for mod in "${GHOST_MODS[@]}"; do
-            find . -name "Makefile" -type f -exec sed -i "/$mod/d" {} +
-          done
-
-          # 3. 修复 Oplus 环境脚本中的 awk 错误
-          sed -i 's/FILENAME=- FNR=1/ /g' OplusKernelEnvConfig.mk || true
-          
-          # 4. 强制 Python 环境指向 Python2
-          grep -rl "#!.*python" scripts/ | xargs sed -i 's/python$/python2/g' || true
-          
-          echo "✅ Source tree is now clean and ready for compilation."
-
-
-      - name: Auto-Fix Missing Modules (XDA Style)
-        run: |
-          cd kernel
-          
-          # 定义已知可能缺失的路径列表
-          MISSING_LIST=(
+          # 【1】手动定义的必须删除目录清单
+          # 哪怕文件夹存在，也要强制从 Kconfig/Makefile 中剥离
+          MUST_REMOVE=(
             "block/uxio_first"
             "mm/healthinfo"
             "mm/memory_isolate"
@@ -72,29 +36,51 @@ jobs:
             "mm/pms"
             "mm/task_mem"
             "mm/malloc_track"
+            "mm/cpu_report"
+            "kernel/sched_assist"
             "drivers/video/fbdev/msm/oplus_display"
             "drivers/soc/oplus/performance"
           )
 
-          # 循环检查：如果文件夹不存在，则在父级 Kconfig 中删除它
-          for item in "${MISSING_LIST[@]}"; do
+          echo "🗑️ Step 1: Force removing manually defined modules..."
+          for item in "${MUST_REMOVE[@]}"; do
             DIR_NAME=$(basename $item)
             PARENT_DIR=$(dirname $item)
-            if [ ! -d "$item" ]; then
-              echo "⚠️ Warning: Module $item is missing, removing from $PARENT_DIR/Kconfig"
-              # 使用 sed 删除包含该模块的行
+            # 从父级 Kconfig 删除引用
+            if [ -f "$PARENT_DIR/Kconfig" ]; then
               sed -i "/$DIR_NAME/d" "$PARENT_DIR/Kconfig" || true
-              # 同时也清理 Makefile 中的引用
+            fi
+            # 从父级 Makefile 删除引用
+            if [ -f "$PARENT_DIR/Makefile" ]; then
               sed -i "/$DIR_NAME/d" "$PARENT_DIR/Makefile" || true
             fi
+            echo "✔️ Forced removal of $item"
           done
 
-          # 针对 OPLUS 的特殊环境配置修复
-          # 修复可能导致 awk 崩溃的 OplusKernelEnvConfig
+          echo "🔍 Step 2: Deep scanning for other missing Kconfig files..."
+          # 自动扫描：如果 Kconfig 引用了物理上不存在的文件，直接删除该行
+          find . -name "Kconfig" -type f -print0 | xargs -0 grep -l "source " | while read -r kfile; do
+            grep "source " "$kfile" | sed -E 's/.*source "([^"]+)".*/\1/' | while read -r target; do
+              # 检查物理文件是否存在
+              if [ ! -f "$target" ] && [ ! -f "$(dirname $kfile)/$target" ]; then
+                echo "🚫 Auto-fixed ghost reference: $target in $kfile"
+                escaped_target=$(echo "$target" | sed 's/\//\\\//g')
+                sed -i "/source \"$escaped_target\"/d" "$kfile"
+              fi
+            done
+          done
+
+          echo "🛠️ Step 3: Environment & Encoding Fixes..."
+          # 修复 Oplus 环境脚本 awk 错误
           sed -i 's/FILENAME=- FNR=1/ /g' OplusKernelEnvConfig.mk || true
-          
-          # 强制将脚本中的 python 指向 python2
+          # 修复非法字符警告
+          if [ -f "mm/damon/Kconfig" ]; then
+            tr -cd '\11\12\15\40-\176' < mm/damon/Kconfig > mm/damon/Kconfig.tmp && mv mm/damon/Kconfig.tmp mm/damon/Kconfig
+          fi
+          # 强制 Python 2
           grep -rl "#!.*python" scripts/ | xargs sed -i 's/python$/python2/g' || true
+          
+          echo "✅ Cleanup complete. Ready to build."
 
       - name: Compile Kernel
         run: |
