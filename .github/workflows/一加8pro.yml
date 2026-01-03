@@ -40,8 +40,11 @@ jobs:
             DIR="$(dirname "$TARGET")"
             
             if [ ! -f "$TARGET" ]; then
-              if [ ! -e "$DIR" ]; then
-               mkdir -p "$DIR"
+              if [ -e "$DIR" ] || [ -L "$DIR" ]; then
+                          if [ ! -d "$DIR" ]; then
+                            echo "  ⚠️ $DIR is a file/link, removing to create directory..."
+                            rm -f "$DIR"
+                          fi
               fi
               cat > "$TARGET" <<EOF
           menu "Dummy placeholder: $SRC"
