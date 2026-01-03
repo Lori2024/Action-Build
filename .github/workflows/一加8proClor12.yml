@@ -26,25 +26,37 @@ jobs:
           echo "$(pwd)/clang/bin" >> $GITHUB_PATH
 
       # 4. 执行编译
-      - name: Compile Kernel
-        run: |
-          cd ${{ env.KERNEL_ROOT }}
-          export ARCH=arm64
-          export SUBARCH=arm64
-          
-          # 使用 Clang 编译器的标准参数
-          make O=out vendor/kona-perf_defconfig
-          make -j$(nproc --all) O=out \
-                      CC=clang \
-                      CROSS_COMPILE=aarch64-linux-gnu- \
-                      CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
-                      LD=ld.lld \
-                      AR=llvm-ar \
-                      NM=llvm-nm \
-                      OBJCOPY=llvm-objcopy \
-                      OBJDUMP=llvm-objdump \
-                      STRIP=llvm-strip
-
+      - name: Fix and Compile
+              run: |
+                cd kernel
+                
+                # 1. 修复 Python 2 脚本兼容性
+                # 将所有 python 引用指向 python2
+                sed -i 's/python/python2/g' scripts/gcc-wrapper.py
+                
+                # 2. 修复 Kconfig 缺失导致的编译中断
+                # 移除不存在的 uxio_first 引用
+                sed -i '/uxio_first/d' block/Kconfig
+                # 移除可能存在的 oplus_display 缺失引用 (OPLUS 源码常见坑)
+                sed -i '/oplus_display/d' drivers/video/fbdev/msm/Kconfig
+                sed -i '/oplus_display/d' drivers/video/fbdev/msm/Makefile
+                
+                # 3. 开始编译
+                export ARCH=arm64
+                export SUBARCH=arm64
+                # 显式指定使用 python2
+                make O=out vendor/kona-perf_defconfig PYTHON=python2
+                make -j$(nproc --all) O=out \
+                            CC=clang \
+                            PYTHON=python2 \
+                            CROSS_COMPILE=aarch64-linux-gnu- \
+                            CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
+                            LD=ld.lld \
+                            AR=llvm-ar \
+                            NM=llvm-nm \
+                            OBJCOPY=llvm-objcopy \
+                            OBJDUMP=llvm-objdump \
+                            STRIP=llvm-strip
       # 5. 查找并上传结果
       - name: Upload Kernel Artifact
         uses: actions/upload-artifact@v4
