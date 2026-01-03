@@ -40,7 +40,9 @@ jobs:
             DIR="$(dirname "$TARGET")"
             
             if [ ! -f "$TARGET" ]; then
-              mkdir -p "$DIR"
+              if [ ! -e "$DIR" ]; then
+               mkdir -p "$DIR"
+              fi
               cat > "$TARGET" <<EOF
           menu "Dummy placeholder: $SRC"
           config OPLUS_DUMMY_$(echo "$SRC" | tr '/.' '__' | tr 'a-z' 'A-Z')
