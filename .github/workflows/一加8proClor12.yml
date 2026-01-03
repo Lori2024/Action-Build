@@ -1,129 +1,49 @@
-
-name: Build OnePlus 8 Pro SukiSU Ultra (A12)
+name: Check OnePlus 8 Pro Config
 on:
-  workflow_dispatch: # 手动触发
+  workflow_dispatch:
 
 jobs:
-  build:
+  check-config:
     runs-on: ubuntu-22.04
     env:
-      CCACHE_COMPILERCHECK: "%compiler% -dumpmachine; %compiler% -dumpversion"
-      CCACHE_NOHASHDIR: "true"
-      CCACHE_MAXSIZE: "2G"
-      CCACHE_HARDLINK: "true"
-      # 一加 8 Pro 4.19 编译命令参数
-      KERNEL_CMDLINE: >
-        ARCH=arm64 
-        SUBARCH=arm64 
-        CROSS_COMPILE=aarch64-linux-gnu- 
-        CROSS_COMPILE_ARM32=arm-linux-gnueabi- 
-        CLANG_TRIPLE=aarch64-linux-gnu- 
-        LLVM=1 
-        LLVM_IAS=1 
-        O=out
+      KERNEL_CMDLINE: ARCH=arm64 SUBARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- O=out
     steps:
-    - name: 增加磁盘空间
-      uses: easimon/maximize-build-space@master
-      with:
-        root-reserve-mb: 8192
-        remove-dotnet: 'true'
-        remove-android: 'true'
+      - name: 安装基础工具
+        run: |
+          sudo apt-get update
+          sudo apt install gcc-aarch64-linux-gnu binutils make bison flex libssl-dev -y
 
-    - name: 安装环境依赖
-      run: |
-        sudo apt-get update -y
-        sudo apt install gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi -y
-        sudo apt install binutils ccache wget make python2 libssl-dev build-essential bc bison flex unzip ca-certificates xz-utils mkbootimg cpio device-tree-compiler git git-lfs dwarves -y
-        # 兼容旧版 Python
-        sudo rm -f /usr/bin/python
-        sudo ln -s /usr/bin/python2.7 /usr/bin/python
+      - name: 拉取源码 (仅 Android 12 分支)
+        run: |
+          git clone --depth=1 -b oneplus/sm8250_s_12.1 https://github.com/OnePlusOSS/android_kernel_oneplus_sm8250.git kernel_source
 
-    - name: 下载 Clang 编译器
-      run: |
-        wget https://github.com/tomxi1997/op8-kernel-source/releases/download/v1/Horizon-Clang-16.0.6.tar.xz
-        sudo mkdir -p /clang
-        sudo tar -xJvf Horizon-Clang-16.0.6.tar.xz -C /clang
-
-    - name: 拉取一加 8 Pro 源码 (SM8250 A12)
-      run: |
-        git clone --depth=1 -b oneplus/sm8250_s_12.1 https://github.com/OnePlusOSS/android_kernel_oneplus_sm8250.git kernel_source
-        cd kernel_source
-        git clone https://github.com/tomxi1997/AnyKernel3.git --depth=1
-
-    - name: 配置 SukiSU Ultra
-      run: |
-        cd kernel_source
-        export PATH=/clang/bin:$PATH
-        # 使用你指定的 nongki 模式
-        curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s nongki
-        
-    - name: 源码目录 Debug 与 深度自动化修复
-      run: |
-        cd kernel_source
-        export PATH=/clang/bin:$PATH
-
-        echo "--- 正在列出源码根目录 ---"
-        ls -F
-        
-        echo "--- 正在检查 mm 和 block 目录 ---"
-        ls -d mm/healthinfo/ || echo "❌ mm/healthinfo 确实不存在"
-        ls -d block/uxio_first/ || echo "❌ block/uxio_first 确实不存在"
-
-        # 1. 自动修复所有无效的 Kconfig 引用 (核心逻辑)
-        # 遍历所有 Kconfig，查找 source "..." 语句，如果路径不存在则删除该行
-        echo "--- 开始自动清理无效的 Kconfig 引用 ---"
-        find . -name "Kconfig*" | xargs sed -i '/source ".*"/ { p; s/.*source "\(.*\)".*/\1/; e ls \0 >/dev/null 2>\&1 || echo "DELETE_ME"; d }; /DELETE_ME/ { d }' || true
-        
-        # 上面的正则可能比较复杂，如果 CI 运行报错，请改用下面这个更稳健的循环逻辑：
-        find . -name "Kconfig*" | while read -r kfile; do
-            # 提取 source 指令后的路径
+      - name: 暴力修复路径并生成配置
+        run: |
+          cd kernel_source
+          
+          # 1. 修复 Oplus 脚本语法错误
+          sed -i 's/awk '\''{print $NF}'\''/awk '\''{print \$NF}'\''/g' OplusKernelEnvConfig.mk || true
+          
+          # 2. 自动剔除所有源码中不存在的 Kconfig 引用 (关键一步)
+          find . -name "Kconfig*" | while read -r kfile; do
             grep "source " "$kfile" | cut -d'"' -f2 | while read -r src_path; do
-                if [ ! -f "$src_path" ] && [ ! -f "$(dirname $kfile)/$src_path" ]; then
-                    echo "🗑️  从 $kfile 中移除不存在的引用: $src_path"
-                    # 转义路径中的斜杠以便 sed 使用
-                    safe_path=$(echo "$src_path" | sed 's/\//\\\//g')
-                    sed -i "/source \"$safe_path\"/d" "$kfile"
-                fi
+              if [ ! -e "$src_path" ] && [ ! -e "$(dirname $kfile)/$src_path" ]; then
+                echo "移除不存在的引用: $src_path"
+                sed -i "\|\"$src_path\"|d" "$kfile"
+              fi
             done
-        done
+          done
 
-        # 2. 修复 OplusKernelEnvConfig.mk 的 awk 语法错误
-        sed -i 's/awk '\''{print $NF}'\''/awk '\''{print \$NF}'\''/g' OplusKernelEnvConfig.mk || true
+          # 3. 生成配置
+          make $KERNEL_CMDLINE vendor/instantnoodlep_defconfig
 
-        # 3. 再次尝试生成配置
-        echo "--- 尝试生成 vendor/instantnoodlep_defconfig ---"
-        make $KERNEL_CMDLINE CC="ccache clang" vendor/instantnoodlep_defconfig
-        
-        if [ -f out/.config ]; then
-          echo "✅ 成功生成 .config 文件"
-          # 顺便把生成的 .config 打印最后几行看看
-          tail -n 20 out/.config
-        else
-          echo "❌ 配置文件生成失败，正在列出 out 目录检查日志"
-          ls -R out/
-          exit 1
-        fi
-
-    - name: 正式编译内核
-      run: |
-        cd kernel_source
-        export PATH=/clang/bin:$PATH
-        make $KERNEL_CMDLINE CC="ccache clang" -j$(nproc --all)
-
-    - name: 准备 AnyKernel3 刷机包
-      run: |
-        cd kernel_source
-        # 4.19 内核通常直接使用 Image.gz-dtb (一加 8 系列特性)
-        if [ -f out/arch/arm64/boot/Image.gz-dtb ]; then
-          cp out/arch/arm64/boot/Image.gz-dtb AnyKernel3/Image.gz-dtb
-        else
-          cp out/arch/arm64/boot/Image.gz AnyKernel3/Image.gz
-          find out/arch/arm64/boot/dts -name "*.dtb" -exec cp {} AnyKernel3/dtb \;
-        fi
-        rm -rf AnyKernel3/.git
-
-    - name: 上传产物
-      uses: actions/upload-artifact@v4
-      with:
-        name: OnePlus8Pro-SukiSU-Ultra-A12
-        path: kernel_source/AnyKernel3/*
+          # 4. 验证结果
+          if [ -f out/.config ]; then
+            echo "======================================"
+            echo "✅ 成功！配置文件已生成在 out/.config"
+            echo "======================================"
+            tail -n 20 out/.config
+          else
+            echo "❌ 失败：未发现配置文件"
+            exit 1
+          fi
