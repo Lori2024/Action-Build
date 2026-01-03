@@ -40,6 +40,7 @@ jobs:
             "kernel/sched_assist"
             "drivers/video/fbdev/msm/oplus_display"
             "drivers/soc/oplus/performance"
+            "fs/proc/healthinfo/Kconfig"
           )
 
           echo "🗑️ Step 1: Force removing manually defined modules..."
