@@ -66,14 +66,14 @@ jobs:
           # 定义已知可能缺失的路径列表
           MISSING_LIST=(
             "block/uxio_first"
-            # "mm/healthinfo"
-            # "mm/memory_isolate"
-            # "mm/multi_kswapd"
-            # "mm/pms"
-            # "mm/task_mem"
-            # "mm/malloc_track"
-            # "drivers/video/fbdev/msm/oplus_display"
-            # "drivers/soc/oplus/performance"
+            "mm/healthinfo"
+            "mm/memory_isolate"
+            "mm/multi_kswapd"
+            "mm/pms"
+            "mm/task_mem"
+            "mm/malloc_track"
+            "drivers/video/fbdev/msm/oplus_display"
+            "drivers/soc/oplus/performance"
           )
 
           # 循环检查：如果文件夹不存在，则在父级 Kconfig 中删除它
