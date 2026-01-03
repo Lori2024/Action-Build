@@ -65,7 +65,7 @@ jobs:
           
           # 定义已知可能缺失的路径列表
           MISSING_LIST=(
-            # "block/uxio_first"
+            "block/uxio_first"
             # "mm/healthinfo"
             # "mm/memory_isolate"
             # "mm/multi_kswapd"
