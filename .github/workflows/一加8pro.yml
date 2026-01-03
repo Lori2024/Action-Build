@@ -22,14 +22,17 @@ jobs:
           git clone --depth=1 https://github.com/kdrag0n/proton-clang.git clang
           echo "$(pwd)/clang/bin" >> $GITHUB_PATH
 
-      - name: Hard-Fix Oplus Kernel Gaps (Safe + Defensive)
+      - name: Hard-Fix Oplus Kernel Gaps (Safe)
         run: |
+          set -e
           cd kernel
       
           echo "🧹 Step 1: Remove Oplus-only Kconfig references (explicit list)..."
       
           REMOVE_KCONFIG_PATHS=(
             "kernel/sched_assist/Kconfig"
+            "kernel/tuning/Kconfig"
+            "block/uxio_first/Kconfig"
             "mm/healthinfo/Kconfig"
             "mm/memory_isolate/Kconfig"
             "mm/multi_kswapd/Kconfig"
@@ -40,7 +43,6 @@ jobs:
             "drivers/video/fbdev/msm/oplus_display/Kconfig"
             "drivers/soc/oplus/performance/Kconfig"
             "fs/proc/healthinfo/Kconfig"
-            "kernel/tuning/Kconfig"
           )
       
           for k in "${REMOVE_KCONFIG_PATHS[@]}"; do
@@ -48,10 +50,13 @@ jobs:
             grep -rl "source \"$k\"" . | xargs -r sed -i "\|source \"$k\"|d"
           done
       
-          echo "🧹 Step 2: Remove Oplus-only Makefile obj entries..."
+          echo
+          echo "🧹 Step 2: Remove Oplus-only Makefile obj-* references..."
       
           REMOVE_OBJ_DIRS=(
             "sched_assist"
+            "tuning"
+            "uxio_first"
             "healthinfo"
             "memory_isolate"
             "multi_kswapd"
@@ -65,34 +70,56 @@ jobs:
       
           for d in "${REMOVE_OBJ_DIRS[@]}"; do
             echo "  🔥 Removing obj references for $d"
-            grep -rlE "obj-.*\+=.*$d/?$" . | xargs -r sed -i "/$d\/\?/d"
+            grep -rlE "obj-.*\+=.*$d(/|$)" . | xargs -r sed -i "/$d/d"
           done
       
-          echo "🧼 Step 3: Fix Oplus env script safely..."
+          echo
+          echo "🧼 Step 3: Fix OplusKernelEnvConfig.mk safely..."
       
-          if grep -q "FILENAME=- FNR=1" OplusKernelEnvConfig.mk; then
-            sed -i 's/FILENAME=- FNR=1/FNR==1/' OplusKernelEnvConfig.mk
+          if [ -f OplusKernelEnvConfig.mk ]; then
+            if grep -q "FILENAME=- FNR=1" OplusKernelEnvConfig.mk; then
+              sed -i 's/FILENAME=- FNR=1/FNR==1/' OplusKernelEnvConfig.mk
+              echo "  ✔ Fixed awk condition in OplusKernelEnvConfig.mk"
+            else
+              echo "  ✔ No known awk issue detected"
+            fi
           fi
       
+          echo
           echo "🐍 Step 4: Ensure python3 (do NOT force python2)..."
       
           grep -rl "^#!.*python$" scripts/ | xargs -r sed -i 's|python$|python3|'
       
-          echo "🛡️ Step 5: Defensive cleanup — remove ANY missing Kconfig source..."
+          echo
+          echo "🛡️ Step 5: Defensive cleanup — SAFE Kconfig source fix..."
       
           ROOT_DIR=$(pwd)
       
-          grep -R '^[[:space:]]*source "' -n . | while IFS=: read -r file line content; do
-            kconfig_path=$(echo "$content" | sed -n 's/.*source "\(.*\)".*/\1/p')
-            real_path="$ROOT_DIR/$kconfig_path"
+          find . -name 'Kconfig*' \
+            ! -path './scripts/kconfig/tests/*' \
+            ! -path './tools/*' \
+            -type f | while read -r kfile; do
       
-            if [ ! -f "$real_path" ]; then
-              echo "  ❌ Missing Kconfig: $kconfig_path → removing from $file"
-              sed -i "\|source \"$kconfig_path\"|d" "$file"
-            fi
-          done
+              grep '^[[:space:]]*source "' "$kfile" | while read -r line; do
+                kpath=$(echo "$line" | sed -n 's/.*source "\(.*\)".*/\1/p')
       
-          echo "✅ Oplus kernel hard-fix (explicit + defensive) completed."
+                # 跳过带变量的合法写法
+                if echo "$kpath" | grep -q '\$('; then
+                  continue
+                fi
+      
+                real="$ROOT_DIR/$kpath"
+      
+                if [ ! -f "$real" ]; then
+                  echo "  ❌ Missing Kconfig: $kpath → removed from $kfile"
+                  sed -i "\|source \"$kpath\"|d" "$kfile"
+                fi
+              done
+            done
+      
+          echo
+          echo "✅ Oplus kernel hard-fix completed safely."
+
 
       - name: Compile Kernel
         run: |
