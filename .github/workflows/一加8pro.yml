@@ -22,6 +22,43 @@ jobs:
           git clone --depth=1 https://github.com/kdrag0n/proton-clang.git clang
           echo "$(pwd)/clang/bin" >> $GITHUB_PATH
 
+      - name: Ultimate Auto-Fix (Scan and Purge)
+        run: |
+          cd kernel
+          
+          # 1. 核心逻辑：扫描所有 Kconfig，自动删除指向不存在路径的 source 行
+          echo "🔍 Scanning for ghost Kconfig references..."
+          find . -name "Kconfig" | while read -r kconfig; do
+            # 提取 source "path/Kconfig" 中的路径
+            lines=$(grep -E 'source "([^"]+)"' "$kconfig" || true)
+            if [ ! -z "$lines" ]; then
+              echo "$lines" | while read -r line; do
+                # 提取引号内的相对路径
+                rel_path=$(echo "$line" | sed -E 's/.*source "([^"]+)".*/\1/')
+                # 检查物理文件是否存在
+                if [ ! -f "$rel_path" ] && [ ! -f "$(dirname $kconfig)/$rel_path" ]; then
+                  echo "🚫 Removing ghost reference: $rel_path from $kconfig"
+                  # 转义路径中的斜杠以便 sed 使用
+                  escaped_path=$(echo "$line" | sed 's/\//\\\//g')
+                  sed -i "/$escaped_path/d" "$kconfig"
+                fi
+              done
+            fi
+          done
+
+          # 2. 补丁：针对一些 Makefile 中死锁的引用 (如 sched_assist)
+          echo "🧹 Cleaning up Makefiles..."
+          find . -name "Makefile" | xargs sed -i '/sched_assist/d' || true
+          find . -name "Makefile" | xargs sed -i '/uxio_first/d' || true
+          
+          # 3. 针对 Oplus 环境脚本的 awk 错误修复
+          sed -i 's/FILENAME=- FNR=1/ /g' OplusKernelEnvConfig.mk || true
+          
+          # 4. 强制脚本指向 python2
+          grep -rl "#!.*python" scripts/ | xargs sed -i 's/python$/python2/g' || true
+          
+          echo "✅ Scan and Fix complete."
+
       - name: Auto-Fix Missing Modules (XDA Style)
         run: |
           cd kernel
