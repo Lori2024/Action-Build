@@ -10,124 +10,82 @@ jobs:
       - name: Install Build Dependencies
         run: |
           sudo apt-get update
-          # 关键点：安装 python2 及其环境
-          sudo apt-get install -y bc bison build-essential flex git curl libssl-dev libncurses5-dev binutils-aarch64-linux-gnu binutils-arm-linux-gnueabi libelf-dev
-          # Ubuntu 22.04 安装 python2 的特殊处理
-          sudo apt-get install -y python2
+          # Ubuntu 22.04 不再原生支持 python2，需要从 universe 库或手动安装
+          sudo apt-get install -y bc bison build-essential flex git curl libssl-dev libncurses5-dev \
+          binutils-aarch64-linux-gnu binutils-arm-linux-gnueabi libelf-dev python2-minimal
+          # 建立软链接，确保脚本能找到 python
           sudo ln -sf /usr/bin/python2 /usr/bin/python
 
       - name: Clone Source and Toolchain
         run: |
           git clone --depth=1 https://github.com/OnePlusOSS/android_kernel_oneplus_sm8250.git -b oneplus/sm8250_t_13.1_op8 kernel
           git clone --depth=1 https://github.com/kdrag0n/proton-clang.git clang
+          # 将 clang 路径加入环境变量
           echo "$(pwd)/clang/bin" >> $GITHUB_PATH
 
       - name: Hard-Fix Oplus Kernel Gaps (ALL PLACEHOLDER MODE)
         run: |
           set -e
           cd kernel
-      
-          echo "🛡️ Oplus Kernel placeholder fix — NEVER delete source"
-          echo "==================================================="
-      
+          echo "🛡️ Oplus Kernel placeholder fix"
           ROOT_DIR="$(pwd)"
-      
-          echo
-          echo "🔍 Step 1: Scan all Kconfig source statements..."
-      
-          mapfile -t SOURCES < <(
-            grep -RhoE '^[[:space:]]*source[[:space:]]+"[^"]+"' \
-              --include='Kconfig*' . \
-            | sed -E 's/.*"([^"]+)".*/\1/' \
-            | sort -u
-          )
-      
-          echo "📦 Found ${#SOURCES[@]} sourced Kconfig paths"
-      
-          echo
-          echo "🧩 Step 2: Create placeholders for missing Kconfig / dirs..."
-      
+          
+          # 扫描 Kconfig
+          mapfile -t SOURCES < <(grep -RhoE '^[[:space:]]*source[[:space:]]+"[^"]+"' --include='Kconfig*' . | sed -E 's/.*"([^"]+)".*/\1/' | sort -u)
+          
           for SRC in "${SOURCES[@]}"; do
-            # 跳过变量路径（如 arch/$(SRCARCH)/Kconfig）
-            if [[ "$SRC" == *'$('*')'* ]]; then
-              echo "  ⚠️ Skip variable path: $SRC"
-              continue
-            fi
-      
+            if [[ "$SRC" == *'$('*')'* ]]; then continue; fi
+            
             TARGET="$ROOT_DIR/$SRC"
             DIR="$(dirname "$TARGET")"
-      
+            
             if [ ! -f "$TARGET" ]; then
-              echo "  ➕ Placeholder for missing: $SRC"
-      
               mkdir -p "$DIR"
-      
-              # 创建 dummy Kconfig
               cat > "$TARGET" <<EOF
-      # AUTO-GENERATED PLACEHOLDER
-      # Missing in open-source release (Oplus vendor module)
-      menu "Dummy placeholder: $SRC"
-      config OPLUS_DUMMY_$(echo "$SRC" | tr '/.' '__' | tr 'a-z' 'A-Z')
-          bool "Placeholder for $SRC"
-          default n
-      endmenu
-      EOF
+          menu "Dummy placeholder: $SRC"
+          config OPLUS_DUMMY_$(echo "$SRC" | tr '/.' '__' | tr 'a-z' 'A-Z')
+              bool "Placeholder for $SRC"
+              default n
+          endmenu
+          EOF
             fi
-      
-            # 确保同级 Makefile 存在
+            
             if [ ! -f "$DIR/Makefile" ]; then
-              echo "    ➕ Create dummy Makefile in $DIR"
               cat > "$DIR/Makefile" <<'EOF'
-      # AUTO-GENERATED PLACEHOLDER
-      obj- :=
-      EOF
+          obj- :=
+          EOF
             fi
           done
-      
-          echo
-          echo "🧼 Step 3: Fix OplusKernelEnvConfig.mk safely..."
-      
-          if [ -f OplusKernelEnvConfig.mk ]; then
-            if grep -q "FILENAME=- FNR=1" OplusKernelEnvConfig.mk; then
-              sed -i 's/FILENAME=- FNR=1/FNR==1/' OplusKernelEnvConfig.mk
-              echo "  ✔ Fixed awk condition"
-            else
-              echo "  ✔ No awk issue detected"
-            fi
-          fi
-      
-          echo
-          echo "🐍 Step 4: Normalize python shebang → python3"
-      
-          grep -rl "^#!.*python$" scripts/ | xargs -r sed -i 's|python$|python3|'
-      
-          echo
-          echo "✅ Placeholder fix complete — Kconfig will NEVER break again."
-      
 
+          # 修复 Oplus 环境脚本
+          if [ -f OplusKernelEnvConfig.mk ]; then
+            sed -i 's/FILENAME=- FNR=1/FNR==1/' OplusKernelEnvConfig.mk
+          fi
+
+          # 转换 shebang
+          grep -rl "^#!.*python$" scripts/ | xargs -r sed -i 's|python$|python3|'
 
       - name: Compile Kernel
         run: |
           cd kernel
           export ARCH=arm64
           export SUBARCH=arm64
-          
-          # 创建输出目录
           mkdir -p out
           
-          # 配置与编译，显式指定 Python 为 python2
+          # 显式使用环境变量和绝对路径调用
           make O=out vendor/kona-perf_defconfig PYTHON=python2
           make -j$(nproc --all) O=out \
-                      CC=clang \
-                      PYTHON=python2 \
-                      CROSS_COMPILE=aarch64-linux-gnu- \
-                      CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
-                      NM=llvm-nm \
-                      OBJCOPY=llvm-objcopy \
-                      OBJDUMP=llvm-objdump \
-                      STRIP=llvm-strip \
-                      LD=ld.lld \
-                      AR=llvm-ar
+                CC=clang \
+                PYTHON=python2 \
+                CLANG_TRIPLE=aarch64-linux-gnu- \
+                CROSS_COMPILE=aarch64-linux-gnu- \
+                CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
+                NM=llvm-nm \
+                OBJCOPY=llvm-objcopy \
+                OBJDUMP=llvm-objdump \
+                STRIP=llvm-strip \
+                LD=ld.lld \
+                AR=llvm-ar
 
       - name: Upload Kernel
         uses: actions/upload-artifact@v4
