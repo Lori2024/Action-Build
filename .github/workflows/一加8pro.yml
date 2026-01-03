@@ -22,59 +22,65 @@ jobs:
           git clone --depth=1 https://github.com/kdrag0n/proton-clang.git clang
           echo "$(pwd)/clang/bin" >> $GITHUB_PATH
 
-      - name: Hard-Fix Specified Gaps
+      - name: Hard-Fix Oplus Kernel Gaps (Safe)
         run: |
           cd kernel
-          
-          # 【1】定义你确认要剔除的目录或文件
-          # 脚本会自动在父级 Kconfig/Makefile 中删除对这些名字的引用
-          MUST_REMOVE=(
-            "block/uxio_first"
-            "mm/healthinfo"
-            "mm/memory_isolate"
-            "mm/multi_kswapd"
-            "mm/pms"
-            "mm/task_mem"
-            "mm/malloc_track"
-            "mm/cpu_report"
-            "kernel/sched_assist"
-            "drivers/video/fbdev/msm/oplus_display"
-            "drivers/soc/oplus/performance"
-            "fs/proc/healthinfo"
+      
+          echo "🧹 Step 1: Remove Oplus-only Kconfig references (global scan)..."
+      
+          REMOVE_KCONFIG_PATHS=(
             "kernel/sched_assist/Kconfig"
+            "mm/healthinfo/Kconfig"
+            "mm/memory_isolate/Kconfig"
+            "mm/multi_kswapd/Kconfig"
+            "mm/pms/Kconfig"
+            "mm/task_mem/Kconfig"
+            "mm/malloc_track/Kconfig"
+            "mm/cpu_report/Kconfig"
+            "drivers/video/fbdev/msm/oplus_display/Kconfig"
+            "drivers/soc/oplus/performance/Kconfig"
+            "fs/proc/healthinfo/Kconfig"
           )
-
-          echo "🗑️ Step 1: Removing specified modules from build tree..."
-          for item in "${MUST_REMOVE[@]}"; do
-            DIR_NAME=$(basename $item)
-            PARENT_DIR=$(dirname $item)
-            
-            # 从父级 Kconfig 删除引用行 (例如 source "xxx/Kconfig")
-            if [ -f "$PARENT_DIR/Kconfig" ]; then
-              echo "✔️ Cleaning $PARENT_DIR/Kconfig"
-              sed -i "/$DIR_NAME/d" "$PARENT_DIR/Kconfig" || true
-            fi
-            
-            # 从父级 Makefile 删除编译行 (例如 obj-y += xxx/)
-            if [ -f "$PARENT_DIR/Makefile" ]; then
-              echo "✔️ Cleaning $PARENT_DIR/Makefile"
-              sed -i "/$DIR_NAME/d" "$PARENT_DIR/Makefile" || true
-            fi
+      
+          for k in "${REMOVE_KCONFIG_PATHS[@]}"; do
+            echo "  🔥 Removing source \"$k\""
+            grep -rl "source \"$k\"" . | xargs -r sed -i "\|source \"$k\"|d"
           done
-
-          echo "🛠️ Step 2: Critical Environment Fixes..."
-          # 必须修复：否则 Oplus 的编译环境配置脚本会报错停止
-          sed -i 's/FILENAME=- FNR=1/ /g' OplusKernelEnvConfig.mk || true
-          
-          # 必须修复：将内核脚本内部引用的 python 强制指向 python2 (GitHub 默认是 python3)
-          grep -rl "#!.*python" scripts/ | xargs sed -i 's/python$/python2/g' || true
-          
-          # 修复 damon 警告 (可选，但建议保留以保持日志清洁)
-          if [ -f "mm/damon/Kconfig" ]; then
-            tr -cd '\11\12\15\40-\176' < mm/damon/Kconfig > mm/damon/Kconfig.tmp && mv mm/damon/Kconfig.tmp mm/damon/Kconfig
+      
+          echo "🧹 Step 2: Remove Oplus-only Makefile obj entries..."
+      
+          REMOVE_OBJ_DIRS=(
+            "sched_assist"
+            "healthinfo"
+            "memory_isolate"
+            "multi_kswapd"
+            "pms"
+            "task_mem"
+            "malloc_track"
+            "cpu_report"
+            "oplus_display"
+            "performance"
+          )
+      
+          for d in "${REMOVE_OBJ_DIRS[@]}"; do
+            echo "  🔥 Removing obj references for $d"
+            grep -rlE "obj-.*\+=.*$d/?$" . | xargs -r sed -i "/$d\/\?/d"
+          done
+      
+          echo "🧼 Step 3: Fix Oplus env script safely..."
+      
+          # 仅在匹配到已知错误模式时才修
+          if grep -q "FILENAME=- FNR=1" OplusKernelEnvConfig.mk; then
+            sed -i 's/FILENAME=- FNR=1/FNR==1/' OplusKernelEnvConfig.mk
           fi
-          
-          echo "✅ Cleanup of specified modules complete."
+      
+          echo "🐍 Step 4: Ensure python3 (do NOT force python2)..."
+      
+          # 只修没有版本号的 python
+          grep -rl "^#!.*python$" scripts/ | xargs -r sed -i 's|python$|python3|'
+      
+          echo "✅ Oplus kernel hard-fix completed safely."
+      
 
       - name: Compile Kernel
         run: |
