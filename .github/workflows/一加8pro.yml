@@ -22,18 +22,40 @@ jobs:
           git clone --depth=1 https://github.com/kdrag0n/proton-clang.git clang
           echo "$(pwd)/clang/bin" >> $GITHUB_PATH
 
-      - name: Fix Source Code Gaps
+      - name: Auto-Fix Missing Modules (XDA Style)
         run: |
           cd kernel
-          # 1. 修复 Kconfig 引用缺失 (uxio_first)
-          sed -i '/uxio_first/d' block/Kconfig
-          # 2. 修复 Kconfig 引用缺失 (healthinfo)
-          sed -i '/healthinfo/d' mm/Kconfig
-          # 3. 修复 Oplus 特色功能可能导致的缺失 (根据日志增加)
-          sed -i '/oplus_display/d' drivers/video/fbdev/msm/Kconfig
-          sed -i '/oplus_display/d' drivers/video/fbdev/msm/Makefile
-          # 4. 修复脚本中的 python 声明 (有些脚本强制写死 python)
-          grep -rlE "#!.*python" . | xargs sed -i 's/python$/python2/g' || true
+          
+          # 定义已知可能缺失的路径列表
+          MISSING_LIST=(
+            "block/uxio_first"
+            "mm/healthinfo"
+            "mm/memory_isolate"
+            "mm/multi_kswapd"
+            "mm/pms"
+            "drivers/video/fbdev/msm/oplus_display"
+            "drivers/soc/oplus/performance"
+          )
+
+          # 循环检查：如果文件夹不存在，则在父级 Kconfig 中删除它
+          for item in "${MISSING_LIST[@]}"; do
+            DIR_NAME=$(basename $item)
+            PARENT_DIR=$(dirname $item)
+            if [ ! -d "$item" ]; then
+              echo "⚠️ Warning: Module $item is missing, removing from $PARENT_DIR/Kconfig"
+              # 使用 sed 删除包含该模块的行
+              sed -i "/$DIR_NAME/d" "$PARENT_DIR/Kconfig" || true
+              # 同时也清理 Makefile 中的引用
+              sed -i "/$DIR_NAME/d" "$PARENT_DIR/Makefile" || true
+            fi
+          done
+
+          # 针对 OPLUS 的特殊环境配置修复
+          # 修复可能导致 awk 崩溃的 OplusKernelEnvConfig
+          sed -i 's/FILENAME=- FNR=1/ /g' OplusKernelEnvConfig.mk || true
+          
+          # 强制将脚本中的 python 指向 python2
+          grep -rl "#!.*python" scripts/ | xargs sed -i 's/python$/python2/g' || true
 
       - name: Compile Kernel
         run: |
