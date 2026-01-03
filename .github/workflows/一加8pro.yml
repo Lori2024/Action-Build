@@ -34,41 +34,45 @@ jobs:
           mapfile -t SOURCES < <(grep -RhoE '^[[:space:]]*source[[:space:]]+"[^"]+"' --include='Kconfig*' . | sed -E 's/.*"([^"]+)".*/\1/' | sort -u)
           
           for SRC in "${SOURCES[@]}"; do
-            if [[ "$SRC" == *'$('*')'* ]]; then continue; fi
-            
-            TARGET="$ROOT_DIR/$SRC"
-            DIR="$(dirname "$TARGET")"
-            
-            if [ ! -f "$TARGET" ]; then
-              if [ -e "$DIR" ] || [ -L "$DIR" ]; then
-                          if [ ! -d "$DIR" ]; then
-                            echo "  ⚠️ $DIR is a file/link, removing to create directory..."
-                            rm -f "$DIR"
-                          fi
-              fi
-              cat > "$TARGET" <<EOF
+                    [[ "$SRC" == *'$('*')'* ]] && continue
+                    
+                    TARGET="$ROOT_DIR/$SRC"
+                    DIR="$(dirname "$TARGET")"
+                    
+                    # 1. 检查父目录路径冲突
+                    if [ -e "$DIR" ] || [ -L "$DIR" ]; then
+                      if [ ! -d "$DIR" ]; then
+                        echo "  ⚠️ Skipping: $DIR is a file or link, cannot create directory."
+                        continue
+                      fi
+                    else
+                      # 路径不存在，尝试创建
+                      mkdir -p "$DIR" 2>/dev/null || { echo "  ❌ Failed to mkdir $DIR"; continue; }
+                    fi
+          
+                    # 2. 检查目标文件冲突
+                    if [ -e "$TARGET" ] || [ -L "$TARGET" ]; then
+                      echo "  ℹ️ Skipping: $TARGET already exists."
+                      continue
+                    fi
+          
+                    # 3. 只有确认无冲突后才创建占位符
+                    echo "  ➕ Creating placeholder: $SRC"
+                    cat > "$TARGET" <<EOF || true
           menu "Dummy placeholder: $SRC"
           config OPLUS_DUMMY_$(echo "$SRC" | tr '/.' '__' | tr 'a-z' 'A-Z')
               bool "Placeholder for $SRC"
               default n
           endmenu
           EOF
-            fi
-            
-            if [ ! -f "$DIR/Makefile" ]; then
-              cat > "$DIR/Makefile" <<'EOF'
+          
+                    # 4. 补齐 Makefile (同样检查是否存在)
+                    if [ ! -e "$DIR/Makefile" ]; then
+                      cat > "$DIR/Makefile" <<'EOF' || true
           obj- :=
           EOF
-            fi
-          done
-
-          # 修复 Oplus 环境脚本
-          if [ -f OplusKernelEnvConfig.mk ]; then
-            sed -i 's/FILENAME=- FNR=1/FNR==1/' OplusKernelEnvConfig.mk
-          fi
-
-          # 转换 shebang
-          grep -rl "^#!.*python$" scripts/ | xargs -r sed -i 's|python$|python3|'
+                    fi
+                  done
 
       - name: Compile Kernel
         run: |
