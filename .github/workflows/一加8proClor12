@@ -1,1 +1,107 @@
 
+name: Build OnePlus 8 Pro SukiSU Ultra (A12)
+on:
+  workflow_dispatch: # 手动触发
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    env:
+      CCACHE_COMPILERCHECK: "%compiler% -dumpmachine; %compiler% -dumpversion"
+      CCACHE_NOHASHDIR: "true"
+      CCACHE_MAXSIZE: "2G"
+      CCACHE_HARDLINK: "true"
+      # 一加 8 Pro 4.19 编译命令参数
+      KERNEL_CMDLINE: >
+        ARCH=arm64 
+        SUBARCH=arm64 
+        CROSS_COMPILE=aarch64-linux-gnu- 
+        CROSS_COMPILE_ARM32=arm-linux-gnueabi- 
+        CLANG_TRIPLE=aarch64-linux-gnu- 
+        LLVM=1 
+        LLVM_IAS=1 
+        O=out
+    steps:
+    - name: 增加磁盘空间
+      uses: easimon/maximize-build-space@master
+      with:
+        root-reserve-mb: 8192
+        remove-dotnet: 'true'
+        remove-android: 'true'
+
+    - name: 安装环境依赖
+      run: |
+        sudo apt-get update -y
+        sudo apt install gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi -y
+        sudo apt install binutils ccache wget make python2 libssl-dev build-essential bc bison flex unzip ca-certificates xz-utils mkbootimg cpio device-tree-compiler git git-lfs dwarves -y
+        # 兼容旧版 Python
+        sudo rm -f /usr/bin/python
+        sudo ln -s /usr/bin/python2.7 /usr/bin/python
+
+    - name: 下载 Clang 编译器
+      run: |
+        wget https://github.com/tomxi1997/op8-kernel-source/releases/download/v1/Horizon-Clang-16.0.6.tar.xz
+        sudo mkdir -p /clang
+        sudo tar -xJvf Horizon-Clang-16.0.6.tar.xz -C /clang
+
+    - name: 拉取一加 8 Pro 源码 (SM8250 A12)
+      run: |
+        git clone --depth=1 -b oneplus/sm8250_s_12.1 https://github.com/OnePlusOSS/android_kernel_oneplus_sm8250.git kernel_source
+        cd kernel_source
+        git clone https://github.com/tomxi1997/AnyKernel3.git --depth=1
+
+    - name: 配置 SukiSU Ultra
+      run: |
+        cd kernel_source
+        export PATH=/clang/bin:$PATH
+        # 使用你指定的 nongki 模式
+        curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s nongki
+
+    - name: 注入 Docker/LXC/BPF 配置
+      run: |
+        cd kernel_source
+        export PATH=/clang/bin:$PATH
+        # 1. 生成基础配置
+        make $KERNEL_CMDLINE CC="ccache clang" vendor/instantnoodlep_defconfig
+        
+        # 2. 修改 .config
+        CONFIG_FILE="out/.config"
+        # BPF & BTF
+        ./scripts/config --file $CONFIG_FILE -e CONFIG_BPF_SYSCALL
+        ./scripts/config --file $CONFIG_FILE -e CONFIG_DEBUG_INFO_BTF
+        # LXC & Docker
+        ./scripts/config --file $CONFIG_FILE -e CONFIG_CGROUPS
+        ./scripts/config --file $CONFIG_FILE -e CONFIG_NAMESPACES
+        ./scripts/config --file $CONFIG_FILE -e CONFIG_USER_NS
+        ./scripts/config --file $CONFIG_FILE -e CONFIG_OVERLAY_FS
+        ./scripts/config --file $CONFIG_FILE -e CONFIG_VETH
+        ./scripts/config --file $CONFIG_FILE -e CONFIG_BRIDGE
+        # 移除版本脏标
+        ./scripts/config --file $CONFIG_FILE --set-str CONFIG_LOCALVERSION "-Suki-OP8P"
+        
+        # 3. 应用修改
+        make $KERNEL_CMDLINE CC="ccache clang" olddefconfig
+
+    - name: 正式编译内核
+      run: |
+        cd kernel_source
+        export PATH=/clang/bin:$PATH
+        make $KERNEL_CMDLINE CC="ccache clang" -j$(nproc --all)
+
+    - name: 准备 AnyKernel3 刷机包
+      run: |
+        cd kernel_source
+        # 4.19 内核通常直接使用 Image.gz-dtb (一加 8 系列特性)
+        if [ -f out/arch/arm64/boot/Image.gz-dtb ]; then
+          cp out/arch/arm64/boot/Image.gz-dtb AnyKernel3/Image.gz-dtb
+        else
+          cp out/arch/arm64/boot/Image.gz AnyKernel3/Image.gz
+          find out/arch/arm64/boot/dts -name "*.dtb" -exec cp {} AnyKernel3/dtb \;
+        fi
+        rm -rf AnyKernel3/.git
+
+    - name: 上传产物
+      uses: actions/upload-artifact@v4
+      with:
+        name: OnePlus8Pro-SukiSU-Ultra-A12
+        path: kernel_source/AnyKernel3/*
