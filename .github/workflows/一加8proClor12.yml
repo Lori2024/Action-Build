@@ -56,29 +56,51 @@ jobs:
         export PATH=/clang/bin:$PATH
         # 使用你指定的 nongki 模式
         curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s nongki
-
-    - name: 修复一加源码漏洞并生成纯净配置
+        
+    - name: 源码目录 Debug 与 深度自动化修复
       run: |
         cd kernel_source
         export PATH=/clang/bin:$PATH
-        
-        # 1. 核心修复：移除不存在的 uxio_first 引用
-        # 这是导致你之前 Error 1 的直接原因
-        sed -i '/uxio_first/d' block/Kconfig
 
-        # 2. 核心修复：处理 Makefile 中的路径逻辑错误
-        # 修复 awk 导致的 field -1 致命错误
+        echo "--- 正在列出源码根目录 ---"
+        ls -F
+        
+        echo "--- 正在检查 mm 和 block 目录 ---"
+        ls -d mm/healthinfo/ || echo "❌ mm/healthinfo 确实不存在"
+        ls -d block/uxio_first/ || echo "❌ block/uxio_first 确实不存在"
+
+        # 1. 自动修复所有无效的 Kconfig 引用 (核心逻辑)
+        # 遍历所有 Kconfig，查找 source "..." 语句，如果路径不存在则删除该行
+        echo "--- 开始自动清理无效的 Kconfig 引用 ---"
+        find . -name "Kconfig*" | xargs sed -i '/source ".*"/ { p; s/.*source "\(.*\)".*/\1/; e ls \0 >/dev/null 2>\&1 || echo "DELETE_ME"; d }; /DELETE_ME/ { d }' || true
+        
+        # 上面的正则可能比较复杂，如果 CI 运行报错，请改用下面这个更稳健的循环逻辑：
+        find . -name "Kconfig*" | while read -r kfile; do
+            # 提取 source 指令后的路径
+            grep "source " "$kfile" | cut -d'"' -f2 | while read -r src_path; do
+                if [ ! -f "$src_path" ] && [ ! -f "$(dirname $kfile)/$src_path" ]; then
+                    echo "🗑️  从 $kfile 中移除不存在的引用: $src_path"
+                    # 转义路径中的斜杠以便 sed 使用
+                    safe_path=$(echo "$src_path" | sed 's/\//\\\//g')
+                    sed -i "/source \"$safe_path\"/d" "$kfile"
+                fi
+            done
+        done
+
+        # 2. 修复 OplusKernelEnvConfig.mk 的 awk 语法错误
         sed -i 's/awk '\''{print $NF}'\''/awk '\''{print \$NF}'\''/g' OplusKernelEnvConfig.mk || true
 
-        # 3. 尝试生成一加 8 Pro 的默认配置
-        # 这里不使用任何脚本注入，只跑官方原版 defconfig
+        # 3. 再次尝试生成配置
+        echo "--- 尝试生成 vendor/instantnoodlep_defconfig ---"
         make $KERNEL_CMDLINE CC="ccache clang" vendor/instantnoodlep_defconfig
         
-        # 4. 检查生成的配置文件是否存在
         if [ -f out/.config ]; then
           echo "✅ 成功生成 .config 文件"
+          # 顺便把生成的 .config 打印最后几行看看
+          tail -n 20 out/.config
         else
-          echo "❌ 配置文件生成失败"
+          echo "❌ 配置文件生成失败，正在列出 out 目录检查日志"
+          ls -R out/
           exit 1
         fi
 
