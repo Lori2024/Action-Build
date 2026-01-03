@@ -41,6 +41,7 @@ jobs:
             "drivers/video/fbdev/msm/oplus_display"
             "drivers/soc/oplus/performance"
             "fs/proc/healthinfo"
+            "kernel/sched_assist/Kconfig"
           )
 
           echo "🗑️ Step 1: Removing specified modules from build tree..."
