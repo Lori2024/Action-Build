@@ -1,49 +1,44 @@
-name: Check OnePlus 8 Pro Config
+name: OP8P Official Config Check
 on:
   workflow_dispatch:
 
 jobs:
-  check-config:
+  make-config:
     runs-on: ubuntu-22.04
     env:
-      KERNEL_CMDLINE: ARCH=arm64 SUBARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- O=out
+      # 严格参考官方要求的编译参数
+      KERNEL_CMDLINE: "ARCH=arm64 SUBARCH=arm64 O=out CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- CLANG_TRIPLE=aarch64-linux-gnu-"
     steps:
-      - name: 安装基础工具
+      - name: 安装基础环境
         run: |
           sudo apt-get update
-          sudo apt install gcc-aarch64-linux-gnu binutils make bison flex libssl-dev -y
+          sudo apt install gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi binutils make bison flex libssl-dev python2 -y
+          # 一加脚本强制依赖 python2
+          sudo rm -f /usr/bin/python && sudo ln -s /usr/bin/python2.7 /usr/bin/python
 
-      - name: 拉取源码 (仅 Android 12 分支)
+      - name: 拉取官方源码 (SM8250 A12)
         run: |
           git clone --depth=1 -b oneplus/sm8250_s_12.1 https://github.com/OnePlusOSS/android_kernel_oneplus_sm8250.git kernel_source
 
-      - name: 暴力修复路径并生成配置
+      - name: 下载 Clang (Horizon 16.0.6)
+        run: |
+          wget https://github.com/tomxi1997/op8-kernel-source/releases/download/v1/Horizon-Clang-16.0.6.tar.xz
+          sudo mkdir -p /clang
+          sudo tar -xJvf Horizon-Clang-16.0.6.tar.xz -C /clang
+
+      - name: 仅生成官方配置
         run: |
           cd kernel_source
-          
-          # 1. 修复 Oplus 脚本语法错误
-          sed -i 's/awk '\''{print $NF}'\''/awk '\''{print \$NF}'\''/g' OplusKernelEnvConfig.mk || true
-          
-          # 2. 自动剔除所有源码中不存在的 Kconfig 引用 (关键一步)
-          find . -name "Kconfig*" | while read -r kfile; do
-            grep "source " "$kfile" | cut -d'"' -f2 | while read -r src_path; do
-              if [ ! -e "$src_path" ] && [ ! -e "$(dirname $kfile)/$src_path" ]; then
-                echo "移除不存在的引用: $src_path"
-                sed -i "\|\"$src_path\"|d" "$kfile"
-              fi
-            done
-          done
+          export PATH=/clang/bin:$PATH
+          # 注意：官方 A12 分支必须带 vendor/ 前缀
+          make $KERNEL_CMDLINE CC="clang" vendor/instantnoodlep_defconfig
 
-          # 3. 生成配置
-          make $KERNEL_CMDLINE vendor/instantnoodlep_defconfig
-
-          # 4. 验证结果
-          if [ -f out/.config ]; then
-            echo "======================================"
-            echo "✅ 成功！配置文件已生成在 out/.config"
-            echo "======================================"
-            tail -n 20 out/.config
+      - name: 验证配置结果
+        run: |
+          if [ -f kernel_source/out/.config ]; then
+            echo "✅ 官方配置生成成功"
+            tail -n 20 kernel_source/out/.config
           else
-            echo "❌ 失败：未发现配置文件"
+            echo "❌ 配置生成失败"
             exit 1
           fi
