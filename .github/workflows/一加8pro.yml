@@ -22,11 +22,11 @@ jobs:
           git clone --depth=1 https://github.com/kdrag0n/proton-clang.git clang
           echo "$(pwd)/clang/bin" >> $GITHUB_PATH
 
-      - name: Hard-Fix Oplus Kernel Gaps (Safe)
+      - name: Hard-Fix Oplus Kernel Gaps (Safe + Defensive)
         run: |
           cd kernel
       
-          echo "🧹 Step 1: Remove Oplus-only Kconfig references (global scan)..."
+          echo "🧹 Step 1: Remove Oplus-only Kconfig references (explicit list)..."
       
           REMOVE_KCONFIG_PATHS=(
             "kernel/sched_assist/Kconfig"
@@ -70,18 +70,29 @@ jobs:
       
           echo "🧼 Step 3: Fix Oplus env script safely..."
       
-          # 仅在匹配到已知错误模式时才修
           if grep -q "FILENAME=- FNR=1" OplusKernelEnvConfig.mk; then
             sed -i 's/FILENAME=- FNR=1/FNR==1/' OplusKernelEnvConfig.mk
           fi
       
           echo "🐍 Step 4: Ensure python3 (do NOT force python2)..."
       
-          # 只修没有版本号的 python
           grep -rl "^#!.*python$" scripts/ | xargs -r sed -i 's|python$|python3|'
       
-          echo "✅ Oplus kernel hard-fix completed safely."
+          echo "🛡️ Step 5: Defensive cleanup — remove ANY missing Kconfig source..."
       
+          ROOT_DIR=$(pwd)
+      
+          grep -R '^[[:space:]]*source "' -n . | while IFS=: read -r file line content; do
+            kconfig_path=$(echo "$content" | sed -n 's/.*source "\(.*\)".*/\1/p')
+            real_path="$ROOT_DIR/$kconfig_path"
+      
+            if [ ! -f "$real_path" ]; then
+              echo "  ❌ Missing Kconfig: $kconfig_path → removing from $file"
+              sed -i "\|source \"$kconfig_path\"|d" "$file"
+            fi
+          done
+      
+          echo "✅ Oplus kernel hard-fix (explicit + defensive) completed."
 
       - name: Compile Kernel
         run: |
