@@ -1,67 +1,65 @@
-name: Build OnePlus SM8250 Kernel
+name: Build OnePlus SM8250 Kernel (Fixed)
 
 on:
-  workflow_dispatch: # 手动点击按钮触发
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-22.04
     steps:
-      # 1. 环境准备：安装编译内核所需的依赖
       - name: Install Build Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc bison build-essential flex git curl libssl-dev libncurses5-dev python3 binutils-aarch64-linux-gnu binutils-arm-linux-gnueabi libelf-dev
+          # 关键点：安装 python2 及其环境
+          sudo apt-get install -y bc bison build-essential flex git curl libssl-dev libncurses5-dev binutils-aarch64-linux-gnu binutils-arm-linux-gnueabi libelf-dev
+          # Ubuntu 22.04 安装 python2 的特殊处理
+          sudo apt-get install -y python2
+          sudo ln -sf /usr/bin/python2 /usr/bin/python
 
-      # 2. 动态克隆官方源码 (解决之前报错的关键)
-      - name: Clone OnePlus Kernel Source
+      - name: Clone Source and Toolchain
         run: |
           git clone --depth=1 https://github.com/OnePlusOSS/android_kernel_oneplus_sm8250.git -b oneplus/sm8250_s_12.1 kernel
-          echo "KERNEL_ROOT=$(pwd)/kernel" >> $GITHUB_ENV
-
-      # 3. 获取编译器 (Proton Clang)
-      - name: Setup Proton Clang
-        run: |
           git clone --depth=1 https://github.com/kdrag0n/proton-clang.git clang
           echo "$(pwd)/clang/bin" >> $GITHUB_PATH
 
-      # 4. 执行编译
-      - name: Fix and Compile
+      - name: Fix Source Code Gaps
         run: |
           cd kernel
-          
-          # 1. 修复 Python 2 脚本兼容性
-          # 将所有 python 引用指向 python2
-          sed -i 's/python/python2/g' scripts/gcc-wrapper.py
-          
-          # 2. 修复 Kconfig 缺失导致的编译中断
-          # 移除不存在的 uxio_first 引用
+          # 1. 修复 Kconfig 引用缺失 (uxio_first)
           sed -i '/uxio_first/d' block/Kconfig
-          # 移除可能存在的 oplus_display 缺失引用 (OPLUS 源码常见坑)
+          # 2. 修复 Kconfig 引用缺失 (healthinfo)
+          sed -i '/healthinfo/d' mm/Kconfig
+          # 3. 修复 Oplus 特色功能可能导致的缺失 (根据日志增加)
           sed -i '/oplus_display/d' drivers/video/fbdev/msm/Kconfig
           sed -i '/oplus_display/d' drivers/video/fbdev/msm/Makefile
-          
-          # 3. 开始编译
+          # 4. 修复脚本中的 python 声明 (有些脚本强制写死 python)
+          grep -rlE "#!.*python" . | xargs sed -i 's/python$/python2/g' || true
+
+      - name: Compile Kernel
+        run: |
+          cd kernel
           export ARCH=arm64
           export SUBARCH=arm64
-          # 显式指定使用 python2
+          
+          # 创建输出目录
+          mkdir -p out
+          
+          # 配置与编译，显式指定 Python 为 python2
           make O=out vendor/kona-perf_defconfig PYTHON=python2
           make -j$(nproc --all) O=out \
                       CC=clang \
                       PYTHON=python2 \
                       CROSS_COMPILE=aarch64-linux-gnu- \
                       CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
-                      LD=ld.lld \
-                      AR=llvm-ar \
                       NM=llvm-nm \
                       OBJCOPY=llvm-objcopy \
                       OBJDUMP=llvm-objdump \
-                      STRIP=llvm-strip
-      # 5. 查找并上传结果
-      - name: Upload Kernel Artifact
+                      STRIP=llvm-strip \
+                      LD=ld.lld \
+                      AR=llvm-ar
+
+      - name: Upload Kernel
         uses: actions/upload-artifact@v4
         with:
-          name: OnePlus-8-Kernel
-          path: |
-            kernel/out/arch/arm64/boot/Image
-            kernel/out/arch/arm64/boot/Image.gz-dtb
+          name: Kernel-Image
+          path: kernel/out/arch/arm64/boot/Image*
