@@ -33,6 +33,7 @@ jobs:
             "mm/memory_isolate"
             "mm/multi_kswapd"
             "mm/pms"
+            "mm/malloc_track"
             "drivers/video/fbdev/msm/oplus_display"
             "drivers/soc/oplus/performance"
           )
