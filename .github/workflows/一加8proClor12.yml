@@ -57,30 +57,30 @@ jobs:
         # 使用你指定的 nongki 模式
         curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s nongki
 
-    - name: 注入 Docker/LXC/BPF 配置
+    - name: 修复一加源码漏洞并生成纯净配置
       run: |
         cd kernel_source
         export PATH=/clang/bin:$PATH
-        # 1. 生成基础配置
+        
+        # 1. 核心修复：移除不存在的 uxio_first 引用
+        # 这是导致你之前 Error 1 的直接原因
+        sed -i '/uxio_first/d' block/Kconfig
+
+        # 2. 核心修复：处理 Makefile 中的路径逻辑错误
+        # 修复 awk 导致的 field -1 致命错误
+        sed -i 's/awk '\''{print $NF}'\''/awk '\''{print \$NF}'\''/g' OplusKernelEnvConfig.mk || true
+
+        # 3. 尝试生成一加 8 Pro 的默认配置
+        # 这里不使用任何脚本注入，只跑官方原版 defconfig
         make $KERNEL_CMDLINE CC="ccache clang" vendor/instantnoodlep_defconfig
         
-        # 2. 修改 .config
-        CONFIG_FILE="out/.config"
-        # BPF & BTF
-        ./scripts/config --file $CONFIG_FILE -e CONFIG_BPF_SYSCALL
-        ./scripts/config --file $CONFIG_FILE -e CONFIG_DEBUG_INFO_BTF
-        # LXC & Docker
-        ./scripts/config --file $CONFIG_FILE -e CONFIG_CGROUPS
-        ./scripts/config --file $CONFIG_FILE -e CONFIG_NAMESPACES
-        ./scripts/config --file $CONFIG_FILE -e CONFIG_USER_NS
-        ./scripts/config --file $CONFIG_FILE -e CONFIG_OVERLAY_FS
-        ./scripts/config --file $CONFIG_FILE -e CONFIG_VETH
-        ./scripts/config --file $CONFIG_FILE -e CONFIG_BRIDGE
-        # 移除版本脏标
-        ./scripts/config --file $CONFIG_FILE --set-str CONFIG_LOCALVERSION "-Suki-OP8P"
-        
-        # 3. 应用修改
-        make $KERNEL_CMDLINE CC="ccache clang" olddefconfig
+        # 4. 检查生成的配置文件是否存在
+        if [ -f out/.config ]; then
+          echo "✅ 成功生成 .config 文件"
+        else
+          echo "❌ 配置文件生成失败"
+          exit 1
+        fi
 
     - name: 正式编译内核
       run: |
