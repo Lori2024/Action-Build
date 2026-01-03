@@ -7,21 +7,21 @@ jobs:
   build:
     runs-on: ubuntu-22.04
     steps:
-      # - name: Install Build Dependencies
-      #   run: |
-      #     sudo apt-get update
-      #     # Ubuntu 22.04 不再原生支持 python2，需要从 universe 库或手动安装
-      #     sudo apt-get install -y bc bison build-essential flex git curl libssl-dev libncurses5-dev \
-      #     binutils-aarch64-linux-gnu binutils-arm-linux-gnueabi libelf-dev python2-minimal
-      #     # 建立软链接，确保脚本能找到 python
-      #     sudo ln -sf /usr/bin/python2 /usr/bin/python
+      - name: Install Build Dependencies
+        run: |
+          sudo apt-get update
+          # Ubuntu 22.04 不再原生支持 python2，需要从 universe 库或手动安装
+          sudo apt-get install -y bc bison build-essential flex git curl libssl-dev libncurses5-dev \
+          binutils-aarch64-linux-gnu binutils-arm-linux-gnueabi libelf-dev python2-minimal
+          # 建立软链接，确保脚本能找到 python
+          sudo ln -sf /usr/bin/python2 /usr/bin/python
 
-      # - name: Clone Source and Toolchain
-      #   run: |
-      #     git clone --depth=1 https://github.com/OnePlusOSS/android_kernel_oneplus_sm8250.git -b oneplus/sm8250_t_13.1_op8 kernel
-      #     git clone --depth=1 https://github.com/kdrag0n/proton-clang.git clang
-      #     # 将 clang 路径加入环境变量
-      #     echo "$(pwd)/clang/bin" >> $GITHUB_PATH
+      - name: Clone Source and Toolchain
+        run: |
+          git clone --depth=1 https://github.com/OnePlusOSS/android_kernel_oneplus_sm8250.git -b oneplus/sm8250_t_13.1_op8 kernel
+          git clone --depth=1 https://github.com/kdrag0n/proton-clang.git clang
+          # 将 clang 路径加入环境变量
+          echo "$(pwd)/clang/bin" >> $GITHUB_PATH
 
       - name: Hard-Fix Oplus Kernel Gaps (ALL PLACEHOLDER MODE)
         run: |
