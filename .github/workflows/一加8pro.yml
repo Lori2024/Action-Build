@@ -5,7 +5,6 @@ on:
 
 jobs:
   build:
-    # 按照要求使用 22.04，以支持 libncurses5 依赖列表
     runs-on: ubuntu-22.04
 
     steps:
@@ -20,17 +19,15 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get update
-          # 完全使用你最初提供的依赖列表
           sudo apt-get install -y git-core gnupg flex bison build-essential zip curl zlib1g-dev \
             gcc-multilib g++-multilib libc6-dev-i386 libncurses5 lib32ncurses5-dev x11proto-core-dev \
             libx11-dev lib32z1-dev libgl1-mesa-dev libxml2-utils xsltproc tar xz-utils cpio findutils \
-            libssl-dev bc # 编译 4.19+ 内核通常需要这两个包处理脚本和证书
-
+            libssl-dev bc 
+            
       - name: Setup Toolchain (Proton Clang)
         run: |
           mkdir clang
           cd clang
-          # 使用你提供的真实下载链接
           curl -LO https://github.com/kdrag0n/proton-clang/archive/refs/heads/master.tar.gz
           tar -xf master.tar.gz --strip-components=1
 
