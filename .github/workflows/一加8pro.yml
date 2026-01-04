@@ -1,48 +1,81 @@
-name: Build LineageOS-20 Boot Image for OnePlus 8 Pro
+name: Build OnePlus SM8250 Kernel
 
 on:
-  workflow_dispatch:
-  push:
-    branches: [ main ]
+  workflow_dispatch: # 手动触发
 
 jobs:
-  build_lineage:
-    runs-on: ubuntu-22.04
-    timeout-minutes: 240
-
+  build:
+    runs-on: ubuntu-latest
     steps:
-    - name: Checkout source
-      uses: actions/checkout@v4
-      with:
-        submodules: recursive
+      - name: Checkout Kernel Source
+        uses: actions/checkout@v4
+        with:
+          repository: LineageOS/android_kernel_oneplus_sm8250
+          ref: lineage-20
+          path: kernel
 
-    - name: Install dependencies
-      run: |
-        sudo apt update
-        sudo apt install -y bc bison build-essential curl flex git-lfs libssl-dev libelf-dev \
-          python3 rsync zip unzip ccache
-        git lfs install
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git-core gnupg flex bison build-essential zip curl zlib1g-dev \
+            gcc-multilib g++-multilib libc6-dev-i386 libncurses5 lib32ncurses5-dev x11proto-core-dev \
+            libx11-dev lib32z1-dev libgl1-mesa-dev libxml2-utils xsltproc tar xz-utils cpio findutils
 
-    - name: Setup repo manifest
-      run: |
-        repo init -u https://github.com/LineageOS/android.git -b lineage-20.0 --git-lfs --no-clone-bundle
-        repo sync -j$(nproc) --no-tags --no-clone-bundle
+      - name: Fetch Toolchain (Clang)
+        run: |
+          mkdir clang
+          cd clang
+          # 使用 Android 13 对应的 Clang 版本 (r450784d)
+          wget https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/master-kernel-build-2022/clang-r450784d.tar.gz
+          tar -xf clang-r450784d.tar.gz
+          rm clang-r450784d.tar.gz
 
-    - name: Setup environment
-      run: |
-        . build/envsetup.sh
-        lunch lineage_instantnoodlep-userdebug
+      - name: Fetch AnyKernel3
+        run: |
+          git clone https://github.com/osm0sis/AnyKernel3.git --depth=1 anykernel
 
-    - name: Compile bootimage (including kernel)
-      run: |
-        m bootimage -j$(nproc) | tee build.log
+      - name: Build Kernel
+        run: |
+          export PATH=$GITHUB_WORKSPACE/clang/bin:$PATH
+          cd kernel
+          
+          # 设置编译参数
+          export ARCH=arm64
+          export SUBARCH=arm64
+          export CROSS_COMPILE=aarch64-linux-gnu-
+          export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
+          export CC=clang
+          export LLVM=1
+          export LLVM_IAS=1
+          
+          # 加载配置 (SM8250 通常使用 vendor/kona_defconfig 或 vendor/lito_defconfig)
+          # 注意：LineageOS 的 sm8250 配置文件通常位于 arch/arm64/configs/vendor/kona_defconfig
+          make O=out vendor/kona_defconfig
+          
+          # 开始编译
+          make -j$(nproc --all) O=out \
+            NM=llvm-nm \
+            OBJCOPY=llvm-objcopy \
+            OBJDUMP=llvm-objdump \
+            STRIP=llvm-strip
 
-    - name: Validate artifact
-      run: |
-        ls out/target/product/instantnoodlep/boot.img
+      - name: Package with AnyKernel3
+        run: |
+          # 检查编译出的镜像是否存在
+          IMAGE=$GITHUB_WORKSPACE/kernel/out/arch/arm64/boot/Image
+          if [ -f "$IMAGE" ]; then
+            cp "$IMAGE" $GITHUB_WORKSPACE/anykernel/
+            cd $GITHUB_WORKSPACE/anykernel
+            # 简单修改 AnyKernel3 配置以适配 SM8250 (可选)
+            sed -i 's/do.devicecheck=1/do.devicecheck=0/g' anykernel.sh
+            zip -r9 ../OnePlus_SM8250_Kernel.zip * -x .git README.md
+          else
+            echo "Error: Kernel Image not found!"
+            exit 1
+          fi
 
-    - name: Upload artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: lineageos20-boot
-        path: out/target/product/instantnoodlep/boot.img
+      - name: Upload Kernel Flashable Zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: OnePlus-SM8250-Kernel-Zip
+          path: OnePlus_SM8250_Kernel.zip
