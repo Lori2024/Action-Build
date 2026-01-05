@@ -171,42 +171,46 @@ jobs:
           # 4. 执行编译
           make -j$(nproc --all) O=out
 
-      - name: Package with AnyKernel3
+      - name: Package Kernel with AK3
         run: |
-          OUT_DIR=$GITHUB_WORKSPACE/kernel/out
-          AK3_DIR=$GITHUB_WORKSPACE/anykernel
-          # 修正路径为你在 YAML 中实际定义的脚本路径
-          SCRIPT_SOURCE=$GITHUB_WORKSPACE/.github/workflows/anykernel.sh
+          # 1. 设定环境变量
+          export SOURCE_FOLDER=$GITHUB_WORKSPACE/kernel/out/arch/arm64/boot
+          export AK3_DIR=$GITHUB_WORKSPACE/anykernel
           
-          # 1. 拷贝内核产物到 AnyKernel 根目录
-          cp $OUT_DIR/arch/arm64/boot/Image $AK3_DIR/
-          [ -f $OUT_DIR/arch/arm64/boot/dtbo.img ] && cp $OUT_DIR/arch/arm64/boot/dtbo.img $AK3_DIR/
+          # 2. 创建临时打包目录并进入
+          mkdir -p tmp
           
-          # 寻找并拷贝 DTB 产物
-          if [ -f $OUT_DIR/arch/arm64/boot/dtb ]; then
-            cp $OUT_DIR/arch/arm64/boot/dtb $AK3_DIR/
-          elif [ -f $OUT_DIR/arch/arm64/boot/dts/vendor/qcom/kona-perf.dtb ]; then
-            cp $OUT_DIR/arch/arm64/boot/dts/vendor/qcom/kona-perf.dtb $AK3_DIR/dtb
+          # 3. 拷贝核心镜像 (Image)
+          # 注意：你之前说是 Image，这里建议根据实际产物拷贝
+          if [ -f $SOURCE_FOLDER/Image ]; then
+            cp -fp $SOURCE_FOLDER/Image tmp/
+          elif [ -f $SOURCE_FOLDER/Image.gz ]; then
+            cp -fp $SOURCE_FOLDER/Image.gz tmp/
           fi
-
-          # 2. 将自定义脚本覆盖到 AnyKernel 目录
-          if [ -f "$SCRIPT_SOURCE" ]; then
-            cp "$SCRIPT_SOURCE" $AK3_DIR/anykernel.sh
-            echo "✅ Custom anykernel.sh loaded."
-          else
-            echo "❌ Error: $SCRIPT_SOURCE not found!"
-            exit 1
+          
+          # 4. 拷贝 dtbo.img (如果存在)
+          [ -f $SOURCE_FOLDER/dtbo.img ] && cp -fp $SOURCE_FOLDER/dtbo.img tmp/
+          
+          # 5. 拷贝 dtb (增加深度搜索逻辑)
+          if [ -f $SOURCE_FOLDER/dtb ]; then
+            cp -fp $SOURCE_FOLDER/dtb tmp/
+          elif [ -f $SOURCE_FOLDER/dts/vendor/qcom/kona.dtb ]; then
+            cp -fp $SOURCE_FOLDER/dts/vendor/qcom/kona.dtb tmp/dtb
           fi
-
-          # 3. 进入 AnyKernel 目录执行打包
-          cd $AK3_DIR
-          # 去除脚本中的注释和空行以减小体积并防止编码问题
-          sed -i '/^#/d' anykernel.sh
-          sed -i '/^[[:space:]]*$/d' anykernel.sh
-
-          # 打包当前目录下的所有文件 (./*)，并存放到工作流根目录
-          # 这样可以确保 ZIP 包内没有 'anykernel' 这一级多余文件夹，可直接刷入
-          zip -r9 $GITHUB_WORKSPACE/OnePlus_SM8250_Kernel.zip ./* -x .git* README.md *placeholder
+          
+          # 6. 将已有的 AnyKernel3 目录内容拷贝到 tmp
+          # 确保这一步包含了 META-INF, tools 等核心文件
+          cp -rp $AK3_DIR/* tmp/
+          
+          # 7. 修正自定义脚本 (覆盖 AK3 默认脚本)
+          cp -fp $GITHUB_WORKSPACE/.github/workflows/anykernel.sh tmp/anykernel.sh
+          sed -i 's/\r$//' tmp/anykernel.sh
+          
+          # 8. 执行最终打包
+          cd tmp
+          zip -r9 ../OnePlus_SM8250_Kernel.zip ./* -x .git* README.md
+          
+          echo "✅ 打包完成，产物位于根目录。"
 
       - name: Upload Kernel Artifact
         uses: actions/upload-artifact@v4
