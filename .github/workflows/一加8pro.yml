@@ -175,34 +175,37 @@ jobs:
         run: |
           OUT_DIR=$GITHUB_WORKSPACE/kernel/out
           AK3_DIR=$GITHUB_WORKSPACE/anykernel
+          # 修正路径为你在 YAML 中实际定义的脚本路径
           SCRIPT_SOURCE=$GITHUB_WORKSPACE/.github/workflows/anykernel.sh
           
-          # 1. 拷贝内核产物
+          # 1. 拷贝内核产物到 AnyKernel 根目录
           cp $OUT_DIR/arch/arm64/boot/Image $AK3_DIR/
           [ -f $OUT_DIR/arch/arm64/boot/dtbo.img ] && cp $OUT_DIR/arch/arm64/boot/dtbo.img $AK3_DIR/
           
-          # 寻找 DTB 产物
+          # 寻找并拷贝 DTB 产物
           if [ -f $OUT_DIR/arch/arm64/boot/dtb ]; then
             cp $OUT_DIR/arch/arm64/boot/dtb $AK3_DIR/
           elif [ -f $OUT_DIR/arch/arm64/boot/dts/vendor/qcom/kona-perf.dtb ]; then
             cp $OUT_DIR/arch/arm64/boot/dts/vendor/qcom/kona-perf.dtb $AK3_DIR/dtb
           fi
 
-          # 2. 将外部脚本覆盖到 AnyKernel 目录
+          # 2. 将自定义脚本覆盖到 AnyKernel 目录
           if [ -f "$SCRIPT_SOURCE" ]; then
             cp "$SCRIPT_SOURCE" $AK3_DIR/anykernel.sh
-            echo "✅ Custom anykernel.sh loaded from scripts folder."
+            echo "✅ Custom anykernel.sh loaded."
           else
-            echo "❌ Error: anykernel_template.sh not found in .github/scripts/"
+            echo "❌ Error: $SCRIPT_SOURCE not found!"
             exit 1
           fi
 
-          # 3. 进入目录并打包
+          # 3. 进入 AnyKernel 目录执行打包
           cd $AK3_DIR
-          # 再次确保去除可能混入的注释和空行（双重保险）
+          # 去除脚本中的注释和空行以减小体积并防止编码问题
           sed -i '/^#/d' anykernel.sh
           sed -i '/^[[:space:]]*$/d' anykernel.sh
-          
+
+          # 打包当前目录下的所有文件 (./*)，并存放到工作流根目录
+          # 这样可以确保 ZIP 包内没有 'anykernel' 这一级多余文件夹，可直接刷入
           zip -r9 $GITHUB_WORKSPACE/OnePlus_SM8250_Kernel.zip ./* -x .git* README.md *placeholder
 
       - name: Upload Kernel Artifact
