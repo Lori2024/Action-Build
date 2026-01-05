@@ -1,16 +1,13 @@
-name: Build OnePlus SM8250 Kernel (with SukiSU)
+name: Build OnePlus SM8250 Kernel
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # 手动触发
 
 jobs:
   build:
     runs-on: ubuntu-22.04
 
     steps:
-      # ---------------------------------------------------------
-      # 1. 拉取 OnePlus SM8250 Kernel 源码
-      # ---------------------------------------------------------
       - name: Checkout Kernel Source
         uses: actions/checkout@v4
         with:
@@ -19,55 +16,31 @@ jobs:
           path: kernel
           fetch-depth: 1
 
-      # ---------------------------------------------------------
-      # 2. 安装编译依赖
-      # ---------------------------------------------------------
       - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            git-core gnupg flex bison build-essential zip curl \
-            zlib1g-dev gcc-multilib g++-multilib libc6-dev-i386 \
-            libncurses5 lib32ncurses5-dev x11proto-core-dev \
-            libx11-dev lib32z1-dev libgl1-mesa-dev \
-            libxml2-utils xsltproc unzip \
-            tar xz-utils cpio findutils \
-            libssl-dev bc
+          sudo apt-get install -y git-core gnupg flex bison build-essential zip curl zlib1g-dev \
+            gcc-multilib g++-multilib libc6-dev-i386 libncurses5 lib32ncurses5-dev x11proto-core-dev \
+            libx11-dev lib32z1-dev libgl1-mesa-dev libxml2-utils xsltproc tar xz-utils cpio findutils \
+            libssl-dev bc pahole
 
-      # ---------------------------------------------------------
-      # 3. 下载 Proton Clang
-      # ---------------------------------------------------------
-      - name: Setup Proton Clang
+      - name: Setup Toolchain (Proton Clang)
         run: |
-          mkdir -p $GITHUB_WORKSPACE/clang
-          cd $GITHUB_WORKSPACE/clang
+          mkdir clang
+          cd clang
           curl -LO https://github.com/kdrag0n/proton-clang/archive/refs/heads/master.tar.gz
           tar -xf master.tar.gz --strip-components=1
 
-      # ---------------------------------------------------------
-      # 4. 集成 SukiSU（KernelSU fork，non-GKI）
-      # ⚠️ 必须在 make defconfig 之前
-      # ---------------------------------------------------------
-      - name: Integrate SukiSU (non-GKI)
-        working-directory: kernel
-        run: |
-          curl -LSs https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh \
-            | bash -s nongki
-
-      # ---------------------------------------------------------
-      # 5. 拉取 AnyKernel3
-      # ---------------------------------------------------------
       - name: Fetch AnyKernel3
         run: |
           git clone https://github.com/osm0sis/AnyKernel3.git --depth=1 anykernel
 
-      # ---------------------------------------------------------
-      # 6. 编译 Kernel
-      # ---------------------------------------------------------
       - name: Build Kernel
         run: |
+          # 设置 Clang 路径
           export PATH=$GITHUB_WORKSPACE/clang/bin:$PATH
-
+          
+          # 按照编译指南设置环境变量
           export ARCH=arm64
           export SUBARCH=arm64
           export CC=clang
@@ -75,51 +48,144 @@ jobs:
           export LLVM_IAS=1
           export CROSS_COMPILE=aarch64-linux-gnu-
           export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
-
+          
           cd kernel
-          mkdir -p out
-
-          # OnePlus SM8250 LineageOS 标准配置
+          mkdir out
+          
+          # 1. 生成初始配置
           make O=out vendor/kona-perf_defconfig
 
-          # 可选：自动启用必要 KPROBE（防止部分源码缺失）
-          # scripts/config --file out/.config \
-          #   -e CONFIG_KPROBES \
-          #   -e CONFIG_HAVE_KPROBES \
-          #   -e CONFIG_KPROBE_EVENTS
+          # 2. 注入自定义配置 (BPF, Docker, FUSE)
+          CONFIG_FILE="out/.config"
+          
+          # === 调试和 BTF 配置 ===
+          echo "CONFIG_DEBUG_INFO=y" >> "$CONFIG_FILE"
+          echo "# CONFIG_DEBUG_INFO_REDUCED is not set" >> "$CONFIG_FILE"
+          echo "CONFIG_DEBUG_INFO_BTF=y" >> "$CONFIG_FILE"
 
+          # === BPF 和 Probes 配置 ===
+          echo "CONFIG_BPF=y" >> "$CONFIG_FILE"
+          echo "CONFIG_BPF_SYSCALL=y" >> "$CONFIG_FILE"
+          echo "CONFIG_BPF_JIT=y" >> "$CONFIG_FILE"
+          echo "CONFIG_CGROUPS=y" >> "$CONFIG_FILE"
+          echo "CONFIG_KPROBES=y" >> "$CONFIG_FILE"
+          echo "CONFIG_NET_INGRESS=y" >> "$CONFIG_FILE"
+          echo "CONFIG_NET_EGRESS=y" >> "$CONFIG_FILE"
+          echo "CONFIG_NET_SCH_INGRESS=m" >> "$CONFIG_FILE"
+          echo "CONFIG_NET_CLS_BPF=m" >> "$CONFIG_FILE"
+          echo "CONFIG_NET_CLS_ACT=y" >> "$CONFIG_FILE"
+          echo "CONFIG_BPF_STREAM_PARSER=y" >> "$CONFIG_FILE"
+          echo "CONFIG_DEBUG_INFO=y" >> "$CONFIG_FILE"
+          echo "CONFIG_DEBUG_INFO_BTF=y" >> "$CONFIG_FILE"
+          echo "CONFIG_KPROBE_EVENTS=y" >> "$CONFIG_FILE"
+          echo "CONFIG_BPF_EVENTS=y" >> "$CONFIG_FILE"
+          
+          echo "✅ Custom BPF and Debug configurations added to $CONFIG_FILE."
+          
+          # =====================
+          # Docker 必需内核选项
+          # =====================
+          
+          # --- DOCKER CGroup 支持（容器资源隔离） ---
+          # echo "CONFIG_ANDROID_CPUSET=y" >> "$CONFIG_FILE"      # ⚙️ Android 特有配置，非 Docker 核心，注释
+          # echo "CONFIG_FAIR_GROUP_SCHED=y" >> "$CONFIG_FILE"    # ❌ 非用户清单：CFS 公平调度器组支持，注释
+          # echo "CONFIG_CFS_BANDWIDTH=y" >> "$CONFIG_FILE"       # ❌ 非用户清单：CPU 时间片限制，注释
+          # echo "CONFIG_CGROUP_PIDS=y" >> "$CONFIG_FILE"          # ❌ 非用户清单：限制容器进程数，注释
+          # echo "CONFIG_CGROUP_NET_PRIO=y" >> "$CONFIG_FILE"     # ❌ 非用户清单：网络优先级控制，注释
+          
+          echo "CONFIG_CGROUPS=y" >> "$CONFIG_FILE"              # ✅ 用户清单：启用 cgroup 框架
+          echo "CONFIG_CGROUP_SCHED=y" >> "$CONFIG_FILE"          # ✅ 用户清单：启用 cgroup 调度器
+          echo "CONFIG_CGROUP_FREEZER=y" >> "$CONFIG_FILE"        # ✅ 用户清单：容器冻结/恢复
+          echo "CONFIG_CGROUP_CPUACCT=y" >> "$CONFIG_FILE"        # ✅ 用户清单：CPU 统计与配额
+          echo "CONFIG_MEMCG=y" >> "$CONFIG_FILE"                 # ✅ 用户清单：内存控制
+          echo "CONFIG_CGROUP_DEVICE=y" >> "$CONFIG_FILE"         # ✅ 用户清单：设备访问控制
+          echo "CONFIG_CPUSETS=y" >> "$CONFIG_FILE"               # ✅ 用户清单：CPU/内存节点绑定控制
+          echo "CONFIG_CGROUP_BPF=y" >> "$CONFIG_FILE"            # ✅ 用户清单：CGroup eBPF 扩展支持
+          
+          # --- DOCKER Namespace 支持（容器隔离核心） ---
+          echo "CONFIG_USER_NS=y" >> "$CONFIG_FILE"             # ❌ 非用户清单：用户命名空间隔离，try add1
+          
+          echo "CONFIG_NAMESPACES=y" >> "$CONFIG_FILE"            # ✅ 用户清单：启用命名空间支持
+          echo "CONFIG_UTS_NS=y" >> "$CONFIG_FILE"                # ✅ 用户清单：主机名隔离
+          echo "CONFIG_IPC_NS=y" >> "$CONFIG_FILE"                # ✅ 用户清单：进程通信隔离
+          echo "CONFIG_PID_NS=y" >> "$CONFIG_FILE"                # ✅ 用户清单：进程号隔离
+          echo "CONFIG_NET_NS=y" >> "$CONFIG_FILE"                # ✅ 用户清单：网络命名空间
+          
+          # --- DOCKER 文件系统支持 ---
+          echo "CONFIG_OVERLAY_FS=y" >> "$CONFIG_FILE"          # ❌ 非用户清单：OverlayFS 存储层支持，注释
+          # echo "CONFIG_EXT4_FS=y" >> "$CONFIG_FILE"             # ❌ 非用户清单：EXT4 文件系统支持，注释
+          # echo "CONFIG_EXT4_FS_POSIX_ACL=y" >> "$CONFIG_FILE"   # ❌ 非用户清单：EXT4 ACL 权限支持，注释
+          # echo "CONFIG_EXT4_FS_SECURITY=y" >> "$CONFIG_FILE"    # ❌ 非用户清单：EXT4 SELinux 标签支持，注释
+          
+          # --- DOCKER 网络支持 (iptables / Netfilter) ---
+          # echo "CONFIG_NF_CONNTRACK=y" >> "$CONFIG_FILE"        # ❌ 非用户清单：连接跟踪核心模块，注释
+          # echo "CONFIG_NF_DEFRAG_IPV4=y" >> "$CONFIG_FILE"      # ❌ 非用户清单：IPv4 分片重组，注释
+          # echo "CONFIG_NET_CLS_CGROUP=m" >> "$CONFIG_FILE"      # ❌ 非用户清单：按 cgroup 分类流量控制，注释
+          
+          echo "CONFIG_VETH=m" >> "$CONFIG_FILE"                  # ✅ 用户清单：虚拟网卡对 veth (模块)
+          echo "CONFIG_BRIDGE=m" >> "$CONFIG_FILE"                # ✅ 用户清单：Linux Bridge 桥接 (模块)
+          echo "CONFIG_BRIDGE_NETFILTER=m" >> "$CONFIG_FILE"      # ✅ 用户清单：桥接上启用 iptables (模块)
+          # echo "CONFIG_BRIDGE_IGMP_SNOOPING=m" >> "$CONFIG_FILE"      #  ❌ 非用户清单：桥接IGMP
+          echo "CONFIG_NF_NAT=y" >> "$CONFIG_FILE"                # ✅ 用户清单：NAT 核心
+          
+          # IPv4 规则
+          echo "CONFIG_IP_NF_FILTER=m" >> "$CONFIG_FILE"          # ✅ 用户清单：iptables filter 表 (模块)
+          echo "CONFIG_IP_NF_MANGLE=m" >> "$CONFIG_FILE"          # ✅ 用户清单：iptables mangle 表 (模块)
+          echo "CONFIG_IP_NF_RAW=m" >> "$CONFIG_FILE"              # ✅ 用户清单：iptables raw 表 (模块)
+          echo "CONFIG_IP_NF_NAT=m" >> "$CONFIG_FILE"              # ✅ 用户清单：IPv4 NAT 支持 (模块)
+          echo "CONFIG_IP_NF_TARGET_MASQUERADE=m" >> "$CONFIG_FILE" # ✅ 用户清单：SNAT 出口伪装 (模块)
+          
+          # IPv6 规则
+          echo "CONFIG_IP6_NF_FILTER=m" >> "$CONFIG_FILE"          # ✅ 用户清单：IPv6 filter 表 (模块)
+          echo "CONFIG_IP6_NF_MANGLE=m" >> "$CONFIG_FILE"          # ✅ 用户清单：IPv6 mangle 表 (模块)
+          echo "CONFIG_IP6_NF_RAW=m" >> "$CONFIG_FILE"            # ✅ 用户清单：IPv6 raw 表 (模块)
+          echo "CONFIG_IP6_NF_NAT=m" >> "$CONFIG_FILE"            # ✅ 用户清单：IPv6 NAT 支持 (模块)
+          echo "CONFIG_IP6_NF_TARGET_MASQUERADE=m" >> "$CONFIG_FILE" # ✅ 用户清单：IPv6 SNAT 出口伪装 (模块)
+          
+          # Netfilter 匹配扩展
+          echo "CONFIG_NETFILTER_XT_MATCH_ADDRTYPE=m" >> "$CONFIG_FILE"  # ✅ 用户清单：地址类型匹配 (模块)
+          echo "CONFIG_NETFILTER_XT_MATCH_CONNTRACK=m" >> "$CONFIG_FILE" # ✅ 用户清单：连接跟踪匹配 (模块)
+          echo "CONFIG_NETFILTER_XT_MATCH_IPVS=m" >> "$CONFIG_FILE"      # ✅ 用户清单：IPVS 匹配 (模块)
+          echo "CONFIG_NETFILTER_XT_MARK=m" >> "$CONFIG_FILE"            # ✅ 用户清单：流量标记匹配 (模块)
+          
+          # --- DOCKER 网络额外可选模块 ---
+          # echo "CONFIG_VXLAN=m" >> "$CONFIG_FILE"               # ❌ 非用户清单：VXLAN 虚拟网络支持，注释
+          # echo "CONFIG_IPVLAN=m" >> "$CONFIG_FILE"              # ❌ 非用户清单：IPvlan 网络模式支持，注释
+          # echo "CONFIG_MACVLAN=m" >> "$CONFIG_FILE"             # ❌ 非用户清单：Macvlan 网络模式支持，注释
+          # echo "CONFIG_DUMMY=m" >> "$CONFIG_FILE"               # ❌ 非用户清单：虚拟 dummy 接口支持，注释
+          
+          # --- DOCKER 可选但推荐/其他 ---
+          # echo "CONFIG_SECCOMP=y" >> "$CONFIG_FILE"             # ❌ 非用户清单：系统调用过滤（Seccomp），注释
+          # echo "CONFIG_SECCOMP_FILTER=y" >> "$CONFIG_FILE"      # ❌ 非用户清单：Seccomp 扩展过滤器，注释
+          # echo "CONFIG_SECURITY_APPARMOR=y" >> "$CONFIG_FILE"   # ❌ 非用户清单：AppArmor 安全模块，注释
+          
+          echo "CONFIG_KEYS=y" >> "$CONFIG_FILE"                  # ✅ 用户清单：密钥环支持 (Swarm/Secret 依赖)
+          echo "CONFIG_POSIX_MQUEUE=y" >> "$CONFIG_FILE"          # ✅ 用户清单：消息队列支持
+
+          # --- Reclone rclone mount） ---
+          echo "CONFIG_FUSE_FS=y" >> "$CONFIG_FILE"                  # ✅ rclone mount ，try add2
+
+          # 3. 再次执行 olddefconfig 确保依赖关系正确
+          make O=out olddefconfig
+
+          # 4. 执行编译
           make -j$(nproc --all) O=out
 
-      # ---------------------------------------------------------
-      # 7. 打包 AnyKernel3
-      # ---------------------------------------------------------
-      - name: Package Kernel with AnyKernel3
+      - name: Package with AnyKernel3
         run: |
           IMAGE=$GITHUB_WORKSPACE/kernel/out/arch/arm64/boot/Image
-
-          if [ ! -f "$IMAGE" ]; then
-            echo "❌ Kernel Image not found!"
+          if [ -f "$IMAGE" ]; then
+            cp "$IMAGE" $GITHUB_WORKSPACE/anykernel/
+            cd $GITHUB_WORKSPACE/anykernel
+            sed -i 's/do.devicecheck=1/do.devicecheck=0/g' anykernel.sh
+            zip -r9 ../OnePlus_SM8250_Kernel.zip * -x .git README.md
+          else
+            echo "Error: Kernel Image not found!"
             exit 1
           fi
 
-          cp "$IMAGE" $GITHUB_WORKSPACE/anykernel/
-
-          cd $GITHUB_WORKSPACE/anykernel
-
-          # 关闭设备校验（适合 XDA 分享）
-          sed -i 's/do.devicecheck=1/do.devicecheck=0/g' anykernel.sh
-
-          zip -r9 \
-            OnePlus_SM8250_Kernel_SukiSU.zip . \
-            -x .git README.md
-
-          mv OnePlus_SM8250_Kernel_SukiSU.zip $GITHUB_WORKSPACE/
-
-      # ---------------------------------------------------------
-      # 8. 上传产物
-      # ---------------------------------------------------------
       - name: Upload Kernel Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: OnePlus-SM8250-Kernel-SukiSU
-          path: OnePlus_SM8250_Kernel_SukiSU.zip
+          name: OnePlus-SM8250-Kernel
+          path: OnePlus_SM8250_Kernel.zip
