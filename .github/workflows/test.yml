@@ -1,0 +1,43 @@
+name: Find OnePlus 8 Pro Kernel Repo
+
+on:
+  workflow_dispatch:
+
+jobs:
+  find-kernel:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Install dependencies
+      run: |
+        sudo apt update
+        sudo apt install -y git curl
+
+    - name: Init repo (Nameless manifest)
+      run: |
+        mkdir nameless_manifest && cd nameless_manifest
+        repo init -u https://github.com/NAMELESS-AOSP-OPENSOURCE/manifest.git -b nameless --depth=1
+
+    - name: Parse kernel project from manifest
+      run: |
+        cd nameless_manifest
+        # 查找 OnePlus 8 Pro 内核仓库信息
+        KERNEL_URL=$(grep -R "sm8250" .repo/manifests -A2 | grep "remote=" | sed 's/.*="//;s/".*//')
+        if [ -z "$KERNEL_URL" ]; then
+          echo "⚠️ 内核仓库未在 Nameless manifest 中声明"
+          echo "Fallback: 使用 AOSP 官方 kernel"
+          KERNEL_URL="https://android.googlesource.com/kernel/msm-5.4"
+        fi
+        echo "Kernel repo URL found: $KERNEL_URL"
+        echo "KERNEL_URL=$KERNEL_URL" >> $GITHUB_ENV
+
+    - name: Output Kernel URL
+      run: |
+        echo "The OnePlus 8 Pro kernel repository URL is: $KERNEL_URL"
+
+    - name: Optional: Clone Kernel
+      if: env.KERNEL_URL != ''
+      run: |
+        git clone $KERNEL_URL kernel_op8pro
+        cd kernel_op8pro
+        git branch -a
