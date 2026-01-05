@@ -173,16 +173,37 @@ jobs:
 
       - name: Package with AnyKernel3
         run: |
-          IMAGE=$GITHUB_WORKSPACE/kernel/out/arch/arm64/boot/Image
-          if [ -f "$IMAGE" ]; then
-            cp "$IMAGE" $GITHUB_WORKSPACE/anykernel/
-            cd $GITHUB_WORKSPACE/anykernel
-            sed -i 's/do.devicecheck=1/do.devicecheck=0/g' anykernel.sh
-            zip -r9 ../OnePlus_SM8250_Kernel.zip * -x .git README.md
+          OUT_DIR=$GITHUB_WORKSPACE/kernel/out
+          AK3_DIR=$GITHUB_WORKSPACE/anykernel
+          SCRIPT_SOURCE=$GITHUB_WORKSPACE/.github/workflows/anykernel.sh
+          
+          # 1. 拷贝内核产物
+          cp $OUT_DIR/arch/arm64/boot/Image $AK3_DIR/
+          [ -f $OUT_DIR/arch/arm64/boot/dtbo.img ] && cp $OUT_DIR/arch/arm64/boot/dtbo.img $AK3_DIR/
+          
+          # 寻找 DTB 产物
+          if [ -f $OUT_DIR/arch/arm64/boot/dtb ]; then
+            cp $OUT_DIR/arch/arm64/boot/dtb $AK3_DIR/
+          elif [ -f $OUT_DIR/arch/arm64/boot/dts/vendor/qcom/kona-perf.dtb ]; then
+            cp $OUT_DIR/arch/arm64/boot/dts/vendor/qcom/kona-perf.dtb $AK3_DIR/dtb
+          fi
+
+          # 2. 将外部脚本覆盖到 AnyKernel 目录
+          if [ -f "$SCRIPT_SOURCE" ]; then
+            cp "$SCRIPT_SOURCE" $AK3_DIR/anykernel.sh
+            echo "✅ Custom anykernel.sh loaded from scripts folder."
           else
-            echo "Error: Kernel Image not found!"
+            echo "❌ Error: anykernel_template.sh not found in .github/scripts/"
             exit 1
           fi
+
+          # 3. 进入目录并打包
+          cd $AK3_DIR
+          # 再次确保去除可能混入的注释和空行（双重保险）
+          sed -i '/^#/d' anykernel.sh
+          sed -i '/^[[:space:]]*$/d' anykernel.sh
+          
+          zip -r9 $GITHUB_WORKSPACE/OnePlus_SM8250_Kernel.zip ./* -x .git* README.md *placeholder
 
       - name: Upload Kernel Artifact
         uses: actions/upload-artifact@v4
