@@ -169,70 +169,29 @@ jobs:
           make O=out olddefconfig
 
           # 4. 执行编译
-          make -j$(nproc --all) O=out
+          
+          make -j$(nproc --all) O=out Image zImage dtbs
 
-      - name: Package Kernel with AK3
+      - name: Package AnyKernel3
         run: |
-          # 1. 设定环境变量
-          export SOURCE_FOLDER=$GITHUB_WORKSPACE/kernel/out/arch/arm64/boot
-          export AK3_DIR=$GITHUB_WORKSPACE/anykernel
-          
-          # 2. 创建临时打包目录并进入
-          mkdir -p tmp
-          
-          # 3. 拷贝核心镜像 (Image)
-          # 注意：你之前说是 Image，这里建议根据实际产物拷贝
-          if [ -f $SOURCE_FOLDER/Image ]; then
-            cp -fp $SOURCE_FOLDER/Image tmp/
-          elif [ -f $SOURCE_FOLDER/Image.gz ]; then
-            cp -fp $SOURCE_FOLDER/Image.gz tmp/
-          fi
-          
-          # 4. 拷贝 dtbo.img (如果存在)
-          [ -f $SOURCE_FOLDER/dtbo.img ] && cp -fp $SOURCE_FOLDER/dtbo.img tmp/
-          
-          # 5. 拷贝 dtb (增加深度搜索逻辑)
-          if [ -f $SOURCE_FOLDER/dtb ]; then
-            cp -fp $SOURCE_FOLDER/dtb tmp/
-          elif [ -f $SOURCE_FOLDER/dts/vendor/qcom/kona.dtb ]; then
-            cp -fp $SOURCE_FOLDER/dts/vendor/qcom/kona.dtb tmp/dtb
-          fi
-          
-          # 6. 将已有的 AnyKernel3 目录内容拷贝到 tmp
-          # 确保这一步包含了 META-INF, tools 等核心文件
-          cp -rp $AK3_DIR/* tmp/
-          
-          # 7. 修正自定义脚本 (覆盖 AK3 默认脚本)
-          cp -fp $GITHUB_WORKSPACE/.github/workflows/anykernel.sh tmp/anykernel.sh
-          sed -i 's/\r$//' tmp/anykernel.sh
-          
-          # 8. 执行最终打包
-          cd tmp
-          zip -r9 ../OnePlus_SM8250_Kernel.zip ./* -x .git* README.md
-          
-          echo "✅ 打包完成，产物位于根目录。"
+          # 进入 AnyKernel3 目录
+          cd anykernel
 
-      - name: List Kernel Output Structure
-        run: |
-          echo "正在生成目录结构报告..."
-          # 使用 find 命令递归列出所有文件并保存到文本
-          # -maxdepth 4 防止目录过深导致文件过大，你可以根据需要调整
-          find $GITHUB_WORKSPACE/kernel/out/arch/arm64/boot -maxdepth 3 > output_structure.txt
-          
-          echo "--- 核心产物检查 ---" >> output_structure.txt
-          ls -l $GITHUB_WORKSPACE/kernel/out/arch/arm64/boot/Image >> output_structure.txt
-          ls -R $GITHUB_WORKSPACE/kernel/out/arch/arm64/boot/dts/ >> output_structure.txt 2>/dev/null || echo "未找到 dts 目录" >> output_structure.txt
-          
-          echo "目录结构已记录至 output_structure.txt"
+          # 调用外部打包脚本 ./github/workflows/anykernel.sh
+          bash ./github/workflows/anykernel.sh
 
-      - name: Upload Structure Log
-        uses: actions/upload-artifact@v4
+          # 输出打包结果路径（假设脚本会生成 anykernel.zip）
+          ls -lh anykernel.zip
+
+
+      - name: Upload Kernel Artifacts
+        uses: actions/upload-artifact@v3
         with:
-          name: kernel-output-structure
-          path: output_structure.txt
+          name: oneplus-sm8250-kernel
+          path: |
+            kernel/out/arch/arm64/boot/Image
+            kernel/out/arch/arm64/boot/dts/vendor/qcom/*.dtb
+            kernel/out/arch/arm64/boot/dts/qcom/*.dtb
+            kernel/out/arch/arm64/boot/zImage
+            anykernel/*
 
-      - name: Upload Kernel Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: OnePlus-SM8250-Kernel
-          path: OnePlus_SM8250_Kernel.zip
