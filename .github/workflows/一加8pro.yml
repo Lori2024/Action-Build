@@ -1,13 +1,16 @@
-name: Build OnePlus SM8250 Kernel
+name: Build OnePlus SM8250 Kernel (with SukiSU)
 
 on:
-  workflow_dispatch: # 手动触发
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-22.04
 
     steps:
+      # ---------------------------------------------------------
+      # 1. 拉取 OnePlus SM8250 Kernel 源码
+      # ---------------------------------------------------------
       - name: Checkout Kernel Source
         uses: actions/checkout@v4
         with:
@@ -16,31 +19,55 @@ jobs:
           path: kernel
           fetch-depth: 1
 
+      # ---------------------------------------------------------
+      # 2. 安装编译依赖
+      # ---------------------------------------------------------
       - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y git-core gnupg flex bison build-essential zip curl zlib1g-dev \
-            gcc-multilib g++-multilib libc6-dev-i386 libncurses5 lib32ncurses5-dev x11proto-core-dev \
-            libx11-dev lib32z1-dev libgl1-mesa-dev libxml2-utils xsltproc tar xz-utils cpio findutils \
-            libssl-dev bc 
-            
-      - name: Setup Toolchain (Proton Clang)
+          sudo apt-get install -y \
+            git-core gnupg flex bison build-essential zip curl \
+            zlib1g-dev gcc-multilib g++-multilib libc6-dev-i386 \
+            libncurses5 lib32ncurses5-dev x11proto-core-dev \
+            libx11-dev lib32z1-dev libgl1-mesa-dev \
+            libxml2-utils xsltproc unzip \
+            tar xz-utils cpio findutils \
+            libssl-dev bc
+
+      # ---------------------------------------------------------
+      # 3. 下载 Proton Clang
+      # ---------------------------------------------------------
+      - name: Setup Proton Clang
         run: |
-          mkdir clang
-          cd clang
+          mkdir -p $GITHUB_WORKSPACE/clang
+          cd $GITHUB_WORKSPACE/clang
           curl -LO https://github.com/kdrag0n/proton-clang/archive/refs/heads/master.tar.gz
           tar -xf master.tar.gz --strip-components=1
 
+      # ---------------------------------------------------------
+      # 4. 集成 SukiSU（KernelSU fork，non-GKI）
+      # ⚠️ 必须在 make defconfig 之前
+      # ---------------------------------------------------------
+      - name: Integrate SukiSU (non-GKI)
+        working-directory: kernel
+        run: |
+          curl -LSs https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh \
+            | bash -s nongki
+
+      # ---------------------------------------------------------
+      # 5. 拉取 AnyKernel3
+      # ---------------------------------------------------------
       - name: Fetch AnyKernel3
         run: |
           git clone https://github.com/osm0sis/AnyKernel3.git --depth=1 anykernel
 
+      # ---------------------------------------------------------
+      # 6. 编译 Kernel
+      # ---------------------------------------------------------
       - name: Build Kernel
         run: |
-          # 设置 Clang 路径
           export PATH=$GITHUB_WORKSPACE/clang/bin:$PATH
-          
-          # 按照编译指南设置环境变量
+
           export ARCH=arm64
           export SUBARCH=arm64
           export CC=clang
@@ -48,34 +75,51 @@ jobs:
           export LLVM_IAS=1
           export CROSS_COMPILE=aarch64-linux-gnu-
           export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
-          
+
           cd kernel
-          mkdir out
-          
-          # 加载 SM8250 (骁龙865) 对应的 LineageOS 配置文件
-          # 提示：该源码仓库的标准配置通常为 vendor/kona-perf_defconfig
+          mkdir -p out
+
+          # OnePlus SM8250 LineageOS 标准配置
           make O=out vendor/kona-perf_defconfig
-          
-          # 执行编译
+
+          # 可选：自动启用必要 KPROBE（防止部分源码缺失）
+          scripts/config --file out/.config \
+            -e CONFIG_KPROBES \
+            -e CONFIG_HAVE_KPROBES \
+            -e CONFIG_KPROBE_EVENTS
+
           make -j$(nproc --all) O=out
 
-      - name: Package with AnyKernel3
+      # ---------------------------------------------------------
+      # 7. 打包 AnyKernel3
+      # ---------------------------------------------------------
+      - name: Package Kernel with AnyKernel3
         run: |
-          # 编译产物检查
           IMAGE=$GITHUB_WORKSPACE/kernel/out/arch/arm64/boot/Image
-          if [ -f "$IMAGE" ]; then
-            cp "$IMAGE" $GITHUB_WORKSPACE/anykernel/
-            cd $GITHUB_WORKSPACE/anykernel
-            # 修改 AnyKernel 脚本以适配
-            sed -i 's/do.devicecheck=1/do.devicecheck=0/g' anykernel.sh
-            zip -r9 ../OnePlus_SM8250_Kernel.zip * -x .git README.md
-          else
-            echo "Error: Kernel Image not found!"
+
+          if [ ! -f "$IMAGE" ]; then
+            echo "❌ Kernel Image not found!"
             exit 1
           fi
 
+          cp "$IMAGE" $GITHUB_WORKSPACE/anykernel/
+
+          cd $GITHUB_WORKSPACE/anykernel
+
+          # 关闭设备校验（适合 XDA 分享）
+          sed -i 's/do.devicecheck=1/do.devicecheck=0/g' anykernel.sh
+
+          zip -r9 \
+            OnePlus_SM8250_Kernel_SukiSU.zip . \
+            -x .git README.md
+
+          mv OnePlus_SM8250_Kernel_SukiSU.zip $GITHUB_WORKSPACE/
+
+      # ---------------------------------------------------------
+      # 8. 上传产物
+      # ---------------------------------------------------------
       - name: Upload Kernel Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: OnePlus-SM8250-Kernel
-          path: OnePlus_SM8250_Kernel.zip
+          name: OnePlus-SM8250-Kernel-SukiSU
+          path: OnePlus_SM8250_Kernel_SukiSU.zip
