@@ -172,22 +172,61 @@ jobs:
           
           make -j$(nproc --all) O=out Image zImage dtbs
 
-      - name: Package AnyKernel3
+
+      - name: Package with AnyKernel3
         run: |
-          # 进入 AnyKernel3 目录
-          cd anykernel
+          # 1. 设定路径变量
+          OUT_DIR=$GITHUB_WORKSPACE/kernel/out/arch/arm64/boot
+          AK3_DIR=$GITHUB_WORKSPACE/anykernel
+          CUSTOM_SCRIPT=$GITHUB_WORKSPACE/.github/workflows/anykernel.sh
+          
+          # 2. 拷贝内核产物到 AnyKernel 目录
+          echo "正在收集编译产物..."
+          cp $OUT_DIR/Image $AK3_DIR/
+          
+          # 拷贝 DTB (针对一加 8 系列 SM8250 的 Kona 平台)
+          # 优先寻找特定路径下的 dtb，否则进行全目录搜索
+          if [ -f $OUT_DIR/dts/vendor/qcom/kona-perf.dtb ]; then
+            cp $OUT_DIR/dts/vendor/qcom/kona-perf.dtb $AK3_DIR/dtb
+          elif [ -f $OUT_DIR/dtb ]; then
+            cp $OUT_DIR/dtb $AK3_DIR/
+          else
+            # 自动寻找第一个生成的 dtb 文件
+            find $OUT_DIR -name "*.dtb" -exec cp {} $AK3_DIR/dtb \; -quit
+          fi
+          
+          # 拷贝 DTBO (如果存在)
+          [ -f $OUT_DIR/dtbo.img ] && cp $OUT_DIR/dtbo.img $AK3_DIR/
 
-          # 调用你的打包脚本，生成 anykernel.zip
-          bash ./github/workflows/anykernel.sh
+          # 3. 覆盖刷机脚本 (anykernel.sh)
+          if [ -f "$CUSTOM_SCRIPT" ]; then
+            cp "$CUSTOM_SCRIPT" $AK3_DIR/anykernel.sh
+            echo "✅ 已载入自定义 anykernel.sh 脚本"
+          else
+            echo "⚠️ 未找到自定义脚本，将使用 AnyKernel3 默认模板"
+          fi
 
-          # 检查 anykernel.zip 是否生成成功
-          ls -lh anykernel.zip
+          # 4. 进入 AnyKernel 目录执行打包
+          cd $AK3_DIR
+          
+          # 清洗脚本格式：去除 Windows 换行符，确保在 Recovery 中能运行
+          sed -i 's/\r$//' anykernel.sh
+          
+          # 赋予 tools 目录权限 (防呆设计)
+          chmod -R 755 tools/
 
-      - name: Upload AnyKernel3 Artifact
+          # 执行打包：将当前目录下的所有内容打包成 ZIP，存放在工作流根目录
+          # 使用 ./* 确保 ZIP 包内部没有多余的层级文件夹
+          zip -r9 $GITHUB_WORKSPACE/OnePlus_SM8250_Kernel_Flashable.zip ./* -x .git* README.md *placeholder
+          
+          echo "✅ 刷机包已生成: OnePlus_SM8250_Kernel_Flashable.zip"
+
+      - name: Upload Flashable ZIP
         uses: actions/upload-artifact@v4
         with:
-          name: anykernel-zip
-          path: anykernel/anykernel.zip
+          name: OnePlus_SM8250_Flashable_Zip
+          path: OnePlus_SM8250_Kernel_Flashable.zip
+
 
       - name: Upload Kernel Artifacts
         uses: actions/upload-artifact@v4
