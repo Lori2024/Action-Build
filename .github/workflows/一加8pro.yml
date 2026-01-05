@@ -83,10 +83,10 @@ jobs:
           make O=out vendor/kona-perf_defconfig
 
           # 可选：自动启用必要 KPROBE（防止部分源码缺失）
-          scripts/config --file out/.config \
-            -e CONFIG_KPROBES \
-            -e CONFIG_HAVE_KPROBES \
-            -e CONFIG_KPROBE_EVENTS
+          # scripts/config --file out/.config \
+          #   -e CONFIG_KPROBES \
+          #   -e CONFIG_HAVE_KPROBES \
+          #   -e CONFIG_KPROBE_EVENTS
 
           make -j$(nproc --all) O=out
 
