@@ -177,15 +177,20 @@ jobs:
           # 进入 AnyKernel3 目录
           cd anykernel
 
-          # 调用外部打包脚本 ./github/workflows/anykernel.sh
+          # 调用你的打包脚本，生成 anykernel.zip
           bash ./github/workflows/anykernel.sh
 
-          # 输出打包结果路径（假设脚本会生成 anykernel.zip）
+          # 检查 anykernel.zip 是否生成成功
           ls -lh anykernel.zip
 
+      - name: Upload AnyKernel3 Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: anykernel-zip
+          path: anykernel/anykernel.zip
 
       - name: Upload Kernel Artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: oneplus-sm8250-kernel
           path: |
