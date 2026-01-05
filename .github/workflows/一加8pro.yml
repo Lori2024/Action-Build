@@ -212,6 +212,25 @@ jobs:
           
           echo "✅ 打包完成，产物位于根目录。"
 
+      - name: List Kernel Output Structure
+        run: |
+          echo "正在生成目录结构报告..."
+          # 使用 find 命令递归列出所有文件并保存到文本
+          # -maxdepth 4 防止目录过深导致文件过大，你可以根据需要调整
+          find $GITHUB_WORKSPACE/kernel/out/arch/arm64/boot -maxdepth 3 > output_structure.txt
+          
+          echo "--- 核心产物检查 ---" >> output_structure.txt
+          ls -l $GITHUB_WORKSPACE/kernel/out/arch/arm64/boot/Image >> output_structure.txt
+          ls -R $GITHUB_WORKSPACE/kernel/out/arch/arm64/boot/dts/ >> output_structure.txt 2>/dev/null || echo "未找到 dts 目录" >> output_structure.txt
+          
+          echo "目录结构已记录至 output_structure.txt"
+
+      - name: Upload Structure Log
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel-output-structure
+          path: output_structure.txt
+
       - name: Upload Kernel Artifact
         uses: actions/upload-artifact@v4
         with:
