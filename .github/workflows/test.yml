@@ -35,9 +35,3 @@ jobs:
       run: |
         echo "The OnePlus 8 Pro kernel repository URL is: $KERNEL_URL"
 
-    - name: Optional: Clone Kernel
-      if: env.KERNEL_URL != ''
-      run: |
-        git clone $KERNEL_URL kernel_op8pro
-        cd kernel_op8pro
-        git branch -a
